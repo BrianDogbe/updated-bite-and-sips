@@ -1,0 +1,252 @@
+import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type {
+  Address, AuditEntry, CartLine, MenuItem, NotificationMsg, Order, OrderStatus,
+  Promotion, Rider, User,
+} from '../types';
+import { MENU, PROMOTIONS, INITIAL_RIDERS, RESTAURANT, INVENTORY_SEED } from '../data';
+import type { InventoryItem } from '../types';
+import { deliveryFeeForKm, haversineKm, serviceFee } from '../services/delivery';
+import { publish, subscribe } from '../services/realtime';
+
+interface Totals { subtotal: number; deliveryFee: number; serviceFee: number; discount: number; total: number; km: number }
+
+interface AppState {
+  user: User | null;
+  login: (name: string, role?: User['role']) => void;
+  logout: () => void;
+  menu: MenuItem[];
+  setAvailability: (id: string, available: boolean) => void;
+  upsertMenuItem: (item: MenuItem) => void;
+  cart: CartLine[];
+  addToCart: (item: MenuItem, qty: number, modifiers: { id: string; name: string; price: number }[], instructions?: string) => void;
+  updateQty: (key: string, qty: number) => void;
+  removeLine: (key: string) => void;
+  clearCart: () => void;
+  cartCount: number;
+  favorites: string[];
+  toggleFav: (id: string) => void;
+  addresses: Address[];
+  activeAddress: Address | null;
+  setActiveAddress: (a: Address | null) => void;
+  addAddress: (a: Address) => void;
+  orders: Order[];
+  placeOrder: (o: Omit<Order, 'id' | 'createdAt' | 'updatedAt' | 'timeline'>) => Order;
+  updateOrderStatus: (id: string, status: OrderStatus, by?: string) => void;
+  assignRider: (orderId: string, riderId: string) => void;
+  riders: Rider[];
+  setRiderOnline: (id: string, online: boolean) => void;
+  promos: Promotion[];
+  applyPromo: (code: string, subtotal: number, deliveryFee: number) => { discount: number; deliveryFee: number };
+  calcTotals: (orderType: 'PICKUP' | 'DELIVERY') => Totals;
+  notifications: NotificationMsg[];
+  pushNotification: (title: string, body: string, orderId?: string) => void;
+  markAllRead: () => void;
+  audit: AuditEntry[];
+  logAudit: (user: string, action: string, resource: string, prev?: string, next?: string) => void;
+  inventory: InventoryItem[];
+  adjustStock: (id: string, delta: number) => void;
+  riderLocations: Record<string, { lat: number; lng: number }>;
+}
+
+const Ctx = createContext<AppState | null>(null);
+
+let orderSeq = 1024;
+const now = () => new Date().toISOString();
+
+const seedAddresses: Address[] = [
+  { id: 'a1', label: 'Home', street: 'Plot 12, Community 7', city: 'Tema', lat: 5.662, lng: -0.008, isDefault: true },
+];
+
+const seedOrders: Order[] = [
+  {
+    id: 'BS1021', customerId: 'c1', customerName: 'Efua A.', customerPhone: '+233 24 000 1111',
+    items: [{ itemId: 'm1', name: 'Smash Chicken Burger', qty: 2, unitPrice: 68, modifiers: [] }],
+    orderType: 'DELIVERY', status: 'OUT_FOR_DELIVERY', paymentStatus: 'PAID', paymentMethod: 'MOMO_MTN',
+    subtotal: 136, deliveryFee: 14, serviceFee: 2.72, discount: 0, total: 152.72,
+    deliveryAddress: seedAddresses[0], riderId: 'r2', deliveryCode: '4821',
+    timeline: [{ status: 'PENDING', at: now() }], createdAt: now(), updatedAt: now(),
+  },
+];
+
+export function AppProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(() => {
+    try { return JSON.parse(localStorage.getItem('bs_user') || 'null'); } catch { return null; }
+  });
+  const [menu, setMenu] = useState<MenuItem[]>(MENU);
+  const [cart, setCart] = useState<CartLine[]>([]);
+  const [favorites, setFavorites] = useState<string[]>(['m1', 'm10']);
+  const [addresses, setAddresses] = useState<Address[]>(seedAddresses);
+  const [activeAddress, setActiveAddressState] = useState<Address | null>(seedAddresses[0]);
+  const [orders, setOrders] = useState<Order[]>(seedOrders);
+  const [riders, setRiders] = useState<Rider[]>(INITIAL_RIDERS);
+  const [promos] = useState<Promotion[]>(PROMOTIONS);
+  const [notifications, setNotifications] = useState<NotificationMsg[]>([
+    { id: 'n1', title: 'Welcome to Bite & Sips', body: 'Use WELCOME15 for 15% off your first order.', at: now(), read: false },
+  ]);
+  const [audit, setAudit] = useState<AuditEntry[]>([
+    { id: 'a1', user: 'System', action: 'Seeded demo data', resource: 'orders', at: now() },
+  ]);
+  const [inventory, setInventory] = useState<InventoryItem[]>(INVENTORY_SEED);
+  const [riderLocations, setRiderLocations] = useState<Record<string, { lat: number; lng: number }>>({});
+  const promoCode = useRef<string>('');
+
+  useEffect(() => {
+    localStorage.setItem('bs_user', JSON.stringify(user));
+  }, [user]);
+
+  // realtime inbound
+  useEffect(() => subscribe((e) => {
+    if (e.type === 'ORDER_STATUS') {
+      setOrders((prev) => prev.map((o) => (o.id === e.orderId ? { ...o, status: e.status, updatedAt: e.at, timeline: [...o.timeline, { status: e.status, at: e.at }] } : o)));
+    } else if (e.type === 'ORDER_CREATED') {
+      setOrders((prev) => (prev.some((o) => o.id === e.order.id) ? prev : [e.order, ...prev]));
+    } else if (e.type === 'RIDER_LOCATION') {
+      setRiderLocations((prev) => ({ ...prev, [e.riderId]: { lat: e.lat, lng: e.lng } }));
+    } else if (e.type === 'NOTIFY') {
+      setNotifications((prev) => [e.notification, ...prev]);
+    }
+  }), []);
+
+  // mock rider movement for active deliveries
+  useEffect(() => {
+    const t = setInterval(() => {
+      setOrders((prev) => {
+        const active = prev.find((o) => o.status === 'OUT_FOR_DELIVERY' && o.riderId);
+        if (!active?.deliveryAddress || !active.riderId) return prev;
+        const cur = riderLocations[active.riderId] ?? { lat: RESTAURANT.lat, lng: RESTAURANT.lng };
+        const dest = { lat: active.deliveryAddress.lat, lng: active.deliveryAddress.lng };
+        const nl = { lat: cur.lat + (dest.lat - cur.lat) * 0.12, lng: cur.lng + (dest.lng - cur.lng) * 0.12 };
+        publish({ type: 'RIDER_LOCATION', riderId: active.riderId, orderId: active.id, lat: nl.lat, lng: nl.lng, at: now() });
+        return prev;
+      });
+    }, 2500);
+    return () => clearInterval(t);
+  }, [riderLocations]);
+
+  const login = useCallback((name: string, role: User['role'] = 'CUSTOMER') => {
+    setUser({ id: 'u_' + Math.random().toString(36).slice(2, 7), name, phone: '+233 24 000 0000', role, active: true });
+  }, []);
+  const logout = useCallback(() => setUser(null), []);
+
+  const setAvailability = useCallback((id: string, available: boolean) => {
+    setMenu((m) => m.map((x) => (x.id === id ? { ...x, available } : x)));
+  }, []);
+  const upsertMenuItem = useCallback((item: MenuItem) => {
+    setMenu((m) => (m.some((x) => x.id === item.id) ? m.map((x) => (x.id === item.id ? item : x)) : [...m, item]));
+  }, []);
+
+  const addToCart = useCallback<AppState['addToCart']>((item, qty, modifiers, instructions) => {
+    const unitPrice = item.price + modifiers.reduce((s, m) => s + m.price, 0);
+    const key = `${item.id}|${modifiers.map((m) => m.id).sort().join(',')}|${instructions ?? ''}`;
+    setCart((c) => {
+      const ex = c.find((l) => l.key === key);
+      if (ex) return c.map((l) => (l.key === key ? { ...l, qty: l.qty + qty } : l));
+      return [...c, { key, itemId: item.id, name: item.name, image: item.image, unitPrice, qty, modifiers, instructions }];
+    });
+  }, []);
+  const updateQty = useCallback((key: string, qty: number) => {
+    setCart((c) => (qty <= 0 ? c.filter((l) => l.key !== key) : c.map((l) => (l.key === key ? { ...l, qty } : l))));
+  }, []);
+  const removeLine = useCallback((key: string) => setCart((c) => c.filter((l) => l.key !== key)), []);
+  const clearCart = useCallback(() => setCart([]), []);
+  const cartCount = useMemo(() => cart.reduce((s, l) => s + l.qty, 0), [cart]);
+
+  const toggleFav = useCallback((id: string) => setFavorites((f) => (f.includes(id) ? f.filter((x) => x !== id) : [...f, id])), []);
+
+  const setActiveAddress = useCallback((a: Address | null) => {
+    setActiveAddressState(a);
+    if (a) setAddresses((prev) => (prev.some((x) => x.id === a.id) ? prev : [...prev, a]));
+  }, []);
+  const addAddress = useCallback((a: Address) => {
+    setAddresses((prev) => [...prev, a]);
+    setActiveAddressState(a);
+  }, []);
+
+  const calcTotals = useCallback<AppState['calcTotals']>((orderType) => {
+    const subtotal = cart.reduce((s, l) => s + l.unitPrice * l.qty, 0);
+    let km = 0; let deliveryFee = 0;
+    if (orderType === 'DELIVERY') {
+      const dest = activeAddress ?? seedAddresses[0];
+      km = haversineKm(RESTAURANT.lat, RESTAURANT.lng, dest.lat, dest.lng);
+      deliveryFee = deliveryFeeForKm(Math.max(km, 0.6)).fee;
+    }
+    const sFee = serviceFee(subtotal);
+    let discount = 0;
+    const code = promoCode.current;
+    if (code) {
+      const p = promos.find((x) => x.code === code && x.active);
+      if (p?.type === 'PERCENT') discount = +(subtotal * (p.value / 100)).toFixed(2);
+      if (p?.type === 'FIXED') discount = Math.min(p.value, subtotal);
+      if (p?.type === 'FREE_DELIVERY') deliveryFee = 0;
+    }
+    return { subtotal, deliveryFee, serviceFee: sFee, discount, total: Math.max(0, subtotal + deliveryFee + sFee - discount), km };
+  }, [cart, activeAddress, promos]);
+
+  const applyPromo = useCallback<AppState['applyPromo']>((code, subtotal, dFee) => {
+    const p = promos.find((x) => x.code.toUpperCase() === code.toUpperCase() && x.active);
+    if (!p) return { discount: 0, deliveryFee: dFee };
+    promoCode.current = p.code;
+    if (p.type === 'PERCENT') return { discount: +(subtotal * (p.value / 100)).toFixed(2), deliveryFee: dFee };
+    if (p.type === 'FIXED') return { discount: Math.min(p.value, subtotal), deliveryFee: dFee };
+    return { discount: 0, deliveryFee: 0 };
+  }, [promos]);
+
+  const pushNotification = useCallback((title: string, body: string, orderId?: string) => {
+    const n: NotificationMsg = { id: 'n' + Date.now(), title, body, at: now(), read: false, orderId };
+    setNotifications((prev) => [n, ...prev]);
+    publish({ type: 'NOTIFY', notification: n });
+  }, []);
+
+  const logAudit = useCallback((userN: string, action: string, resource: string, prev?: string, next?: string) => {
+    setAudit((a) => [{ id: 'log' + Date.now(), user: userN, action, resource, prev, next, at: now() }, ...a]);
+  }, []);
+
+  const placeOrder: AppState['placeOrder'] = useCallback((o) => {
+    const id = `BS${orderSeq++}`;
+    const order: Order = { ...o, id, createdAt: now(), updatedAt: now(), timeline: [{ status: 'PENDING', at: now() }] };
+    setOrders((prev) => [order, ...prev]);
+    publish({ type: 'ORDER_CREATED', order });
+    pushNotification('Order received', `Order ${id} placed. Total GH₵${order.total.toFixed(2)}.`, id);
+    // simulate kitchen auto-confirm after 6s for demo
+    setTimeout(() => publish({ type: 'ORDER_STATUS', orderId: id, status: 'CONFIRMED', at: now() }), 6000);
+    setCart([]);
+    promoCode.current = '';
+    return order;
+  }, [pushNotification]);
+
+  const updateOrderStatus = useCallback((id: string, status: OrderStatus, by?: string) => {
+    publish({ type: 'ORDER_STATUS', orderId: id, status, at: now() });
+    const o = orders.find((x) => x.id === id);
+    if (o) logAudit(by ?? 'staff', `Marked ${id} as ${status}`, 'orders', o.status, status);
+  }, [orders, logAudit]);
+
+  const assignRider = useCallback((orderId: string, riderId: string) => {
+    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, riderId } : o)));
+    publish({ type: 'RIDER_ASSIGNED', orderId, riderId });
+    setRiders((prev) => prev.map((r) => (r.id === riderId ? { ...r, busy: true } : r)));
+  }, []);
+
+  const setRiderOnline = useCallback((id: string, online: boolean) => {
+    setRiders((r) => r.map((x) => (x.id === id ? { ...x, online } : x)));
+  }, []);
+
+  const markAllRead = useCallback(() => setNotifications((n) => n.map((x) => ({ ...x, read: true }))), []);
+  const adjustStock = useCallback((id: string, delta: number) => {
+    setInventory((inv) => inv.map((x) => (x.id === id ? { ...x, qty: Math.max(0, x.qty + delta) } : x)));
+  }, []);
+
+  const value: AppState = {
+    user, login, logout, menu, setAvailability, upsertMenuItem, cart, addToCart, updateQty,
+    removeLine, clearCart, cartCount, favorites, toggleFav, addresses, activeAddress,
+    setActiveAddress, addAddress, orders, placeOrder, updateOrderStatus, assignRider,
+    riders, setRiderOnline, promos, applyPromo, calcTotals, notifications, pushNotification,
+    markAllRead, audit, logAudit, inventory, adjustStock, riderLocations,
+  };
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+export function useApp(): AppState {
+  const v = useContext(Ctx);
+  if (!v) throw new Error('useApp outside provider');
+  return v;
+}
