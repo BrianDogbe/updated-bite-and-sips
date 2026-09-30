@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingBag, Truck, UtensilsCrossed, Users,
@@ -9,6 +9,7 @@ import { useApp } from '../../shared/store/AppStore';
 import { cn } from '../../lib/utils';
 import { Button } from '../../components/ui/button';
 import { Badge, Input } from '../../components/ui/primitives';
+import { backendEnabled, checkHealth, isBackendReachable } from '../../shared/services/backend';
 
 const NAV = [
   { to: '/admin', end: true, label: 'Dashboard', icon: LayoutDashboard },
@@ -33,6 +34,27 @@ export default function AdminLayout() {
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [serverLive, setServerLive] = useState<boolean | null>(null);
+
+  // Server reachability indicator (admin only)
+  useEffect(() => {
+    if (!backendEnabled()) return;
+    let stop = false;
+    const ping = async () => {
+      try {
+        await checkHealth();
+        if (!stop) setServerLive(true);
+      } catch {
+        if (!stop) setServerLive(isBackendReachable() ? true : false);
+      }
+    };
+    ping();
+    const t = setInterval(ping, 15000);
+    return () => {
+      stop = true;
+      clearInterval(t);
+    };
+  }, []);
 
   // Sign-in is handled by loginWithPassword (backend JWT when VITE_API_URL
   // is set, strict demo credential otherwise — see the store).
@@ -174,6 +196,19 @@ export default function AdminLayout() {
             ))}
           </div>
           <div className="ml-auto flex items-center gap-2">
+            {backendEnabled() && serverLive !== null && (
+              <span
+                role="status"
+                title={serverLive ? 'Backend connected — live data' : 'Backend unreachable — running on local mock data'}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-extrabold',
+                  serverLive ? 'bg-leaf/10 text-leaf' : 'bg-gold/15 text-yellow-800',
+                )}
+              >
+                <span className={cn('h-2 w-2 rounded-full', serverLive ? 'bg-leaf' : 'bg-gold')} aria-hidden />
+                {serverLive ? 'Server live' : 'Offline · mock'}
+              </span>
+            )}
             <Badge className="bg-leaf/10 text-leaf">{user.role}</Badge>
             <button
               type="button"

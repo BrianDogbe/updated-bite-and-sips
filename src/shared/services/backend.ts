@@ -24,6 +24,10 @@ export const setToken = (t: string | null): void => {
   }
 };
 
+let reachable = false;
+/** True once any request has succeeded and no network failure since. */
+export const isBackendReachable = (): boolean => reachable;
+
 export async function api<T>(path: string, opts: { method?: string; body?: unknown; auth?: boolean } = {}): Promise<T> {
   if (!API_URL) throw new Error('BackendOff');
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -31,16 +35,27 @@ export async function api<T>(path: string, opts: { method?: string; body?: unkno
     const token = getToken();
     if (token) headers.Authorization = `Bearer ${token}`;
   }
-  const res = await fetch(`${API_URL}${path}`, {
-    method: opts.method ?? 'GET',
-    headers,
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method: opts.method ?? 'GET',
+      headers,
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    });
+  } catch {
+    reachable = false;
+    throw new Error('Cannot reach the server. Start the backend (`cd server && npm run dev`) or disconnect it.');
+  }
+  reachable = true;
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(err.error ?? `API ${res.status}`);
   }
   return (await res.json()) as T;
+}
+
+export async function checkHealth(): Promise<{ ok: boolean; payments: string }> {
+  return api('/api/health');
 }
 
 let socket: Socket | null = null;

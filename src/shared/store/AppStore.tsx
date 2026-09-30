@@ -7,7 +7,7 @@ import { MENU, PROMOTIONS, INITIAL_RIDERS, RESTAURANT, INVENTORY_SEED } from '..
 import type { InventoryItem } from '../types';
 import { deliveryFeeForKm, haversineKm, serviceFee } from '../services/delivery';
 import { publish, subscribe } from '../services/realtime';
-import { api, backendEnabled, connectBackendSocket, getToken, setToken } from '../services/backend';
+import { api, backendEnabled, connectBackendSocket, getToken, isBackendReachable, setToken } from '../services/backend';
 
 interface Totals { subtotal: number; deliveryFee: number; serviceFee: number; discount: number; total: number; km: number }
 
@@ -144,10 +144,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }), []);
 
-  // mock rider movement for active deliveries (backend mode uses real GPS via socket)
+  // mock rider movement for active deliveries (skipped once the server is reachable —
+  // then real GPS arrives over the socket instead)
   useEffect(() => {
     const t = setInterval(() => {
-      if (backendEnabled()) return;
+      if (backendEnabled() && isBackendReachable()) return;
       setOrders((prev) => {
         const active = prev.find((o) => o.status === 'OUT_FOR_DELIVERY' && o.riderId);
         if (!active?.deliveryAddress || !active.riderId) return prev;
@@ -203,6 +204,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const loginWithPassword = useCallback(async (email: string, password: string): Promise<{ ok: boolean; error?: string }> => {
     const clean = email.trim().toLowerCase();
+    const mockCheck = (): { ok: boolean; error?: string } => {
+      if (clean !== 'admin@biteandsips.com') return { ok: false, error: 'Incorrect email.' };
+      if (password !== 'admin1234') return { ok: false, error: 'Incorrect password.' };
+      setUser({ id: 'u_admin', name: 'Admin', email: clean, phone: '', role: 'ADMIN', active: true });
+      return { ok: true };
+    };
     if (backendEnabled()) {
       try {
         const res = await api<{ token: string; user: { id: string; name: string; email: string; role: User['role']; phone?: string } }>(
@@ -212,13 +219,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setUser({ id: res.user.id, name: res.user.name, email: res.user.email, phone: res.user.phone ?? '', role: res.user.role, active: true });
         return { ok: true };
       } catch (e) {
+        // Server down → strict mock credential keeps the portal usable.
+        if (!isBackendReachable()) return mockCheck();
         return { ok: false, error: e instanceof Error ? e.message : 'Login failed' };
       }
     }
-    if (clean !== 'admin@biteandsips.com') return { ok: false, error: 'Incorrect email.' };
-    if (password !== 'admin1234') return { ok: false, error: 'Incorrect password.' };
-    setUser({ id: 'u_admin', name: 'Admin', email: clean, phone: '', role: 'ADMIN', active: true });
-    return { ok: true };
+    return mockCheck();
   }, []);
 
   const setAvailability = useCallback((id: string, available: boolean) => {

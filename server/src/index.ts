@@ -15,13 +15,28 @@ import messageRoutes from './routes/messages.js';
 import opsRoutes from './routes/ops.js';
 
 const PORT = Number(process.env.PORT ?? 4000);
-const ORIGINS = (process.env.CLIENT_ORIGIN ?? 'http://localhost:5173').split(',').map((s) => s.trim());
+// Allowed browser origins: explicit list plus any localhost port
+// (Vite picks a new port when the default is busy).
+const EXTRA_ORIGINS = (process.env.CLIENT_ORIGIN ?? 'http://localhost:5173').split(',').map((s) => s.trim()).filter(Boolean);
+const ORIGIN_CHECK = (origin: string | undefined, cb: (err: Error | null, ok?: boolean) => void) => {
+  if (!origin) return cb(null, true);
+  if (EXTRA_ORIGINS.includes(origin)) return cb(null, true);
+  try {
+    const u = new URL(origin);
+    if ((u.hostname === 'localhost' || u.hostname === '127.0.0.1') && (u.protocol === 'http:' || u.protocol === 'https:')) {
+      return cb(null, true);
+    }
+  } catch {
+    /* fall through */
+  }
+  cb(new Error('CORS blocked'));
+};
 
 ensureSchema();
 seedIfEmpty();
 
 const app = express();
-app.use(cors({ origin: ORIGINS, credentials: true }));
+app.use(cors({ origin: ORIGIN_CHECK, credentials: true }));
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/api/health', (_req, res) => {
@@ -42,7 +57,7 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 });
 
 const http = createServer(app);
-const io = new Server(http, { cors: { origin: ORIGINS } });
+const io = new Server(http, { cors: { origin: ORIGIN_CHECK } });
 setIO(io);
 io.on('connection', (socket) => {
   socket.on('rider:location', (p: { riderId: string; orderId: string; lat: number; lng: number }) => {
