@@ -140,22 +140,24 @@ export function toMenuItem(row: Record<string, unknown>): Record<string, unknown
 }
 
 export function seedIfEmpty(): void {
-  const menuCount = (db.prepare('SELECT COUNT(*) AS c FROM menu_items').get() as { c: number }).c;
-  if (menuCount > 0) return;
-
+  // Seed accounts are ensured on every boot (INSERT OR IGNORE backfills
+  // accounts missing from older DBs without touching existing ones).
   const adminHash = bcrypt.hashSync('admin1234', 10);
   db.prepare(
-    "INSERT INTO users (id, name, email, phone, password_hash, role, active) VALUES (?, ?, ?, ?, ?, ?, 1)",
+    "INSERT OR IGNORE INTO users (id, name, email, phone, password_hash, role, active) VALUES (?, ?, ?, ?, ?, ?, 1)",
   ).run('u_admin', 'Admin', 'admin@biteandsips.com', '024 469 3556', adminHash, 'ADMIN');
   db.prepare(
-    "INSERT INTO users (id, name, email, phone, password_hash, role, active) VALUES (?, ?, ?, ?, ?, ?, 1)",
+    "INSERT OR IGNORE INTO users (id, name, email, phone, password_hash, role, active) VALUES (?, ?, ?, ?, ?, ?, 1)",
   ).run('u_kitchen', 'Kitchen Staff', 'kitchen@biteandsips.com', '024 469 3556', bcrypt.hashSync('kitchen1234', 10), 'KITCHEN_STAFF');
   const rider = db.prepare(
-    "INSERT INTO users (id, name, email, phone, password_hash, role, active, vehicle, plate, online, busy, lat, lng, rating) VALUES (?, ?, ?, ?, ?, 'RIDER', 1, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT OR IGNORE INTO users (id, name, email, phone, password_hash, role, active, vehicle, plate, online, busy, lat, lng, rating) VALUES (?, ?, ?, ?, ?, 'RIDER', 1, ?, ?, ?, ?, ?, ?, ?)",
   );
   rider.run('r1', 'Kwame Mensah', 'kwame@biteandsips.com', '+233 24 111 2222', bcrypt.hashSync('rider1234', 10), 'Motorbike', 'GR-4521-23', 1, 0, 5.56, -0.2, 4.9);
   rider.run('r2', 'Ama Boateng', 'ama.rider@biteandsips.com', '+233 24 333 4444', bcrypt.hashSync('rider1234', 10), 'Motorbike', 'GR-7810-24', 1, 1, 5.57, -0.19, 4.8);
   rider.run('r3', 'Yusuf Ali', 'yusuf@biteandsips.com', '+233 24 555 6666', bcrypt.hashSync('rider1234', 10), 'Bicycle', null, 0, 0, 5.55, -0.21, 4.7);
+
+  const menuCount = (db.prepare('SELECT COUNT(*) AS c FROM menu_items').get() as { c: number }).c;
+  if (menuCount > 0) return;
 
   const img = (s: string) => `https://images.unsplash.com/${s}?auto=format&fit=crop&w=800&q=70`;
   const items: Array<Record<string, unknown>> = [

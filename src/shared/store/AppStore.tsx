@@ -7,7 +7,7 @@ import { MENU, PROMOTIONS, INITIAL_RIDERS, RESTAURANT, INVENTORY_SEED } from '..
 import type { InventoryItem } from '../types';
 import { deliveryFeeForKm, haversineKm, serviceFee } from '../services/delivery';
 import { publish, subscribe } from '../services/realtime';
-import { api, backendEnabled, connectBackendSocket, setToken } from '../services/backend';
+import { api, backendEnabled, connectBackendSocket, getToken, setToken } from '../services/backend';
 
 interface Totals { subtotal: number; deliveryFee: number; serviceFee: number; discount: number; total: number; km: number }
 
@@ -76,21 +76,27 @@ const seedOrders: Order[] = [
 ];
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
+  // Backend mode = 100% live data: no mock seeds, stale mock sessions dropped.
+  const live = backendEnabled();
   const [user, setUser] = useState<User | null>(() => {
-    try { return JSON.parse(localStorage.getItem('bs_user') || 'null'); } catch { return null; }
+    try {
+      if (live && !getToken()) return null;
+      return JSON.parse(localStorage.getItem('bs_user') || 'null');
+    } catch { return null; }
   });
   const [menu, setMenu] = useState<MenuItem[]>(MENU);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [favorites, setFavorites] = useState<string[]>(['m1', 'm10']);
   const [addresses, setAddresses] = useState<Address[]>(seedAddresses);
   const [activeAddress, setActiveAddressState] = useState<Address | null>(seedAddresses[0]);
-  const [orders, setOrders] = useState<Order[]>(seedOrders);
-  const [riders, setRiders] = useState<Rider[]>(INITIAL_RIDERS);
+  const [orders, setOrders] = useState<Order[]>(live ? [] : seedOrders);
+  const [riders, setRiders] = useState<Rider[]>(live ? [] : INITIAL_RIDERS);
   const [promos] = useState<Promotion[]>(PROMOTIONS);
   const [notifications, setNotifications] = useState<NotificationMsg[]>([
     { id: 'n1', title: 'Welcome to Bite & Sips', body: 'Use WELCOME15 for 15% off your first order.', at: now(), read: false },
   ]);
   const [messages, setMessages] = useState<ContactMessage[]>(() => {
+    if (backendEnabled()) return [];
     try {
       const raw = localStorage.getItem('bs_messages');
       if (raw) return JSON.parse(raw) as ContactMessage[];
