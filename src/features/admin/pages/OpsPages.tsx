@@ -3,7 +3,7 @@ import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
-import { Copy, Minus, Plus } from 'lucide-react';
+import { Copy, Inbox, Minus, Plus, Reply, Trash2 } from 'lucide-react';
 import { useApp } from '../../../shared/store/AppStore';
 import { RESTAURANT } from '../../../shared/data';
 import { FEE_BANDS } from '../../../shared/services/delivery';
@@ -36,9 +36,9 @@ export function CustomersPage() {
   return (
     <div className="space-y-4">
       <SectionTitle kicker="CRM" title="Customers" sub={`${rows.length} customers derived from orders`} />
-      <Card><CardBody className="p-4"><Input placeholder="Search name or phone…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search customers" /></CardBody></Card>
+      <Card className="border-0"><CardBody className="p-4"><Input placeholder="Search name or phone…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search customers" /></CardBody></Card>
       {rows.length === 0 ? <Empty title="No customers yet" body="Customers appear once orders are placed." /> : (
-        <Card>
+        <Card className="border-0">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-left text-sm">
               <thead><tr className="border-b border-coal/10 text-xs uppercase tracking-wide text-coal/50">
@@ -73,7 +73,7 @@ export function RidersPage() {
       <SectionTitle kicker="Fleet" title="Riders" sub={`${riders.filter((r) => r.online).length} of ${riders.length} online`} />
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {riders.map((r) => (
-          <Card key={r.id}>
+          <Card key={r.id} className="border-0">
             <CardBody className="space-y-2 p-4 text-sm">
               <div className="flex items-center justify-between">
                 <p className="font-display text-base font-extrabold">{r.name}</p>
@@ -102,6 +102,104 @@ export function RidersPage() {
           </Card>
         ))}
       </div>
+    </div>
+  );
+}
+
+/* ── Messages (customer inbox) ───────────────────────────────── */
+export function MessagesPage() {
+  const { messages, markMessageRead, deleteMessage, user, logAudit } = useApp();
+  const toast = useToast();
+  const [selectedId, setSelectedId] = useState<string | null>(messages.find((m) => !m.read)?.id ?? messages[0]?.id ?? null);
+  const [filter, setFilter] = useState<'ALL' | 'UNREAD'>('ALL');
+  const unread = messages.filter((m) => !m.read).length;
+  const list = filter === 'UNREAD' ? messages.filter((m) => !m.read) : messages;
+  const selected = messages.find((m) => m.id === selectedId) ?? null;
+
+  const open = (id: string) => {
+    setSelectedId(id);
+    markMessageRead(id);
+  };
+  const remove = (id: string) => {
+    deleteMessage(id);
+    logAudit(user?.name ?? 'admin', `Deleted message ${id}`, 'messages');
+    if (selectedId === id) setSelectedId(null);
+    toast({ title: 'Message deleted', kind: 'info' });
+  };
+
+  return (
+    <div className="space-y-4">
+      <SectionTitle kicker="Inbox" title="Customer messages" sub={unread > 0 ? `${unread} unread` : 'All caught up'} />
+      <div className="flex gap-2">
+        {(['ALL', 'UNREAD'] as const).map((f) => (
+          <Button key={f} size="sm" variant={filter === f ? 'default' : 'outline'} onClick={() => setFilter(f)}>
+            {f === 'ALL' ? 'All' : `Unread${unread > 0 ? ` (${unread})` : ''}`}
+          </Button>
+        ))}
+      </div>
+      {messages.length === 0 ? (
+        <Empty title="No messages" body="Contact form messages from customers will land here." />
+      ) : list.length === 0 ? (
+        <Empty title="No unread messages" body="Everything has been read." />
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
+          <ul className="space-y-2">
+            {list.map((m) => (
+              <li key={m.id}>
+                <button
+                  onClick={() => open(m.id)}
+                  aria-current={selectedId === m.id ? 'true' : undefined}
+                  className={cn(
+                    'block w-full rounded-2xl border-0 bg-white p-4 text-left shadow-card transition hover:bg-cream',
+                    selectedId === m.id && 'ring-2 ring-brand-600',
+                  )}
+                >
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2 font-extrabold">
+                      {!m.read && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-brand-600" aria-label="Unread" />}
+                      {m.name}
+                    </span>
+                    <span className="shrink-0 text-[11px] text-coal/50">{format12h(m.at)}</span>
+                  </span>
+                  <span className="mt-1 block truncate text-sm text-coal/60">{m.body}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div>
+            {selected ? (
+              <Card className="border-0"><CardBody className="p-6">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-display text-lg font-extrabold">{selected.name}</p>
+                    <p className="text-sm text-coal/55">{selected.email} · {format12h(selected.at)}</p>
+                  </div>
+                  <Badge className={selected.read ? 'bg-coal/5 text-coal/60' : 'bg-brand-600/10 text-brand-700'}>
+                    {selected.read ? 'Read' : 'Unread'}
+                  </Badge>
+                </div>
+                <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed">{selected.body}</p>
+                <div className="mt-5 flex flex-wrap gap-2 border-t border-coal/10 pt-4">
+                  <a
+                    href={`mailto:${selected.email}?subject=${encodeURIComponent(`Re: Your message to Bite & Sips`)}&body=${encodeURIComponent(`Hi ${selected.name},%0D%0A%0D%0A`)}`}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-coal px-4 py-2.5 text-xs font-bold text-white hover:bg-black"
+                  >
+                    <Reply size={14} /> Reply by email
+                  </a>
+                  <Button size="sm" variant="outline" onClick={() => remove(selected.id)}>
+                    <Trash2 /> Delete
+                  </Button>
+                </div>
+              </CardBody></Card>
+            ) : (
+              <Card className="border-0"><CardBody className="flex min-h-[200px] flex-col items-center justify-center text-center">
+                <Inbox size={28} className="text-coal/25" />
+                <p className="mt-2 font-bold">Select a message to read it</p>
+              </CardBody></Card>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -148,13 +246,13 @@ export function FinancePage() {
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[['Revenue', GHS(revenue)], ['Average order value', GHS(aov)], ['Delivery revenue', GHS(deliveryRev)], ['Discounts given', GHS(discounts)]].map(([l, v]) => (
-          <Card key={l}><CardBody className="p-4"><p className="text-[11px] font-bold uppercase tracking-wide text-coal/50">{l}</p><p className="mt-1 font-display text-xl font-extrabold">{v}</p></CardBody></Card>
+          <Card key={l} className="border-0"><CardBody className="p-4"><p className="text-[11px] font-bold uppercase tracking-wide text-coal/50">{l}</p><p className="mt-1 font-display text-xl font-extrabold">{v}</p></CardBody></Card>
         ))}
       </div>
       {rows.length === 0 ? <Empty title="No transactions" body="No paid orders in this period." /> : (
         <>
           <div className="grid gap-3 lg:grid-cols-2">
-            <Card><CardBody className="p-5">
+            <Card className="border-0"><CardBody className="p-5">
               <p className="font-display font-extrabold">Revenue by payment method</p>
               <ul className="mt-4 space-y-3">
                 {byMethod.map(([method, rev]) => (
@@ -170,7 +268,7 @@ export function FinancePage() {
                 ))}
               </ul>
             </CardBody></Card>
-            <Card><CardBody className="p-5">
+            <Card className="border-0"><CardBody className="p-5">
               <p className="font-display font-extrabold">Pickup vs delivery</p>
               <div className="mt-2 h-44">
                 <ResponsiveContainer width="100%" height="100%">
@@ -189,7 +287,7 @@ export function FinancePage() {
               </ul>
             </CardBody></Card>
           </div>
-          <Card><CardBody className="p-5">
+          <Card className="border-0"><CardBody className="p-5">
             <p className="font-display font-extrabold">Top dishes by revenue</p>
             <ol className="mt-4 space-y-3">
               {topDishes.map((d, i) => (
@@ -208,7 +306,7 @@ export function FinancePage() {
               ))}
             </ol>
           </CardBody></Card>
-          <Card>
+          <Card className="border-0">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] text-left text-sm">
                 <thead><tr className="border-b border-coal/10 text-xs uppercase tracking-wide text-coal/50">
@@ -249,7 +347,7 @@ export function InventoryPage() {
     <div className="space-y-4">
       <SectionTitle kicker="Stock" title="Inventory" sub={`${inventory.filter((i) => i.qty <= i.minQty).length} items at or below minimum`} />
       {inventory.length === 0 ? <Empty title="No inventory" body="Seed stock items to track them here." /> : (
-        <Card>
+        <Card className="border-0">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[680px] text-left text-sm">
               <thead><tr className="border-b border-coal/10 text-xs uppercase tracking-wide text-coal/50">
@@ -292,7 +390,7 @@ export function PromotionsPage() {
       <SectionTitle kicker="Marketing" title="Promotions" sub={`${promos.filter((p) => p.active).length} active codes`} />
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {promos.map((p) => (
-          <Card key={p.id}>
+          <Card key={p.id} className="border-0">
             <CardBody className="flex items-center justify-between p-4">
               <div>
                 <p className="font-display text-lg font-extrabold tracking-wide">{p.code}</p>
@@ -349,7 +447,7 @@ export function AnalyticsPage() {
     <div className="space-y-4">
       <SectionTitle kicker="Insights" title="Analytics" sub="Revenue, channel mix and peak hours." />
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card><CardBody>
+        <Card className="border-0"><CardBody>
           <h3 className="font-display text-base font-extrabold">Revenue trend (7d)</h3>
           <div className="mt-3 h-64"><ResponsiveContainer width="100%" height="100%">
             <AreaChart data={trend}><CartesianGrid strokeDasharray="3 3" stroke="#14121022" />
@@ -359,7 +457,7 @@ export function AnalyticsPage() {
             </AreaChart>
           </ResponsiveContainer></div>
         </CardBody></Card>
-        <Card><CardBody>
+        <Card className="border-0"><CardBody>
           <h3 className="font-display text-base font-extrabold">Pickup vs delivery</h3>
           <div className="mt-3 h-64"><ResponsiveContainer width="100%" height="100%">
             <PieChart>
@@ -371,7 +469,7 @@ export function AnalyticsPage() {
           </ResponsiveContainer></div>
         </CardBody></Card>
       </div>
-      <Card><CardBody>
+      <Card className="border-0"><CardBody>
         <h3 className="font-display text-base font-extrabold">Peak hours</h3>
         {peak.length === 0 ? <div className="mt-3"><Empty title="No data yet" body="Hourly order volume will appear here." /></div> : (
           <div className="mt-3 h-64"><ResponsiveContainer width="100%" height="100%">
@@ -404,7 +502,7 @@ export function StaffPage() {
   return (
     <div className="space-y-4">
       <SectionTitle kicker="Team" title="Staff & roles" sub="RBAC is enforced by the backend — this matrix is read-only here." />
-      <Card>
+      <Card className="border-0">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead><tr className="border-b border-coal/10 text-xs uppercase tracking-wide text-coal/50">
@@ -437,7 +535,7 @@ export function AuditPage() {
     <div className="space-y-4">
       <SectionTitle kicker="Compliance" title="Audit logs" sub={`${audit.length} entries`} />
       {audit.length === 0 ? <Empty title="No audit entries" body="Staff actions will be recorded here." /> : (
-        <Card>
+        <Card className="border-0">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[680px] text-left text-sm">
               <thead><tr className="border-b border-coal/10 text-xs uppercase tracking-wide text-coal/50">
@@ -474,7 +572,7 @@ export function SettingsPage() {
     <div className="space-y-4">
       <SectionTitle kicker="Config" title="Settings" sub="Restaurant profile, fees, hours and credentials." />
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card><CardBody className="space-y-2">
+        <Card className="border-0"><CardBody className="space-y-2">
           <h3 className="font-display text-base font-extrabold">Restaurant info</h3>
           <label className="text-xs font-bold uppercase tracking-wide text-coal/50" htmlFor="s-name">Name</label>
           <Input id="s-name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -485,7 +583,7 @@ export function SettingsPage() {
           <p className="text-xs text-coal/60">Hours: {RESTAURANT.openHour}:00 – {RESTAURANT.closeHour}:00 daily</p>
           <Button onClick={() => toast({ title: 'Saved (demo)', body: 'Persists to backend in production.', kind: 'success' })}>Save changes</Button>
         </CardBody></Card>
-        <Card><CardBody>
+        <Card className="border-0"><CardBody>
           <h3 className="font-display text-base font-extrabold">Delivery fee bands</h3>
           <table className="mt-2 w-full text-left text-sm">
             <thead><tr className="border-b border-coal/10 text-xs uppercase tracking-wide text-coal/50">
@@ -502,7 +600,7 @@ export function SettingsPage() {
           </table>
         </CardBody></Card>
       </div>
-      <Card><CardBody>
+      <Card className="border-0"><CardBody>
         <h3 className="font-display text-base font-extrabold">Credentials checklist</h3>
         <p className="text-sm text-coal/60">Add these in the backend <code>.env</code> — never in frontend code.</p>
         <ul className="mt-2 space-y-1.5 text-sm">

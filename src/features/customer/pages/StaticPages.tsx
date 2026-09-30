@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bike, Clock, Flame, Leaf, Mail, MapPin, MessageCircleQuestion, Phone, Send, UtensilsCrossed } from 'lucide-react';
+import { useApp } from '../../../shared/store/AppStore';
 import { RESTAURANT } from '../../../shared/data';
 import { cn, hours12h } from '../../../lib/utils';
 import { Card, CardBody, Input, SectionTitle } from '../../../components/ui/primitives';
@@ -52,6 +53,7 @@ export function AboutPage() {
 
 export function ContactPage() {
   const toast = useToast();
+  const { addMessage } = useApp();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [msg, setMsg] = useState('');
@@ -60,8 +62,8 @@ export function ContactPage() {
       <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Contact' }]} />
       <SectionTitle kicker="Contact" title="Talk to us" sub="Catering, feedback, bulk orders — we reply within a day." />
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <Card><CardBody>
-          <form onSubmit={(e) => { e.preventDefault(); if (!name.trim() || !msg.trim()) { toast({ title: 'Add your name and message', kind: 'error' }); return; } toast({ title: 'Message sent', body: 'We’ll get back to you soon.', kind: 'success' }); setName(''); setEmail(''); setMsg(''); }}>
+        <Card className="border-0"><CardBody>
+          <form onSubmit={(e) => { e.preventDefault(); if (!name.trim() || !msg.trim()) { toast({ title: 'Add your name and message', kind: 'error' }); return; } addMessage({ name: name.trim(), email: email.trim() || '—', body: msg.trim() }); toast({ title: 'Message sent', body: 'We’ll get back to you soon.', kind: 'success' }); setName(''); setEmail(''); setMsg(''); }}>
             <label htmlFor="c-name" className="text-xs font-bold uppercase tracking-wide">Name</label>
             <Input id="c-name" value={name} onChange={(e) => setName(e.target.value)} className="mt-1" placeholder="Your name" />
             <label htmlFor="c-email" className="mt-3 block text-xs font-bold uppercase tracking-wide">Email</label>
@@ -72,14 +74,14 @@ export function ContactPage() {
           </form>
         </CardBody></Card>
         <div className="space-y-3 text-sm">
-          <Card><CardBody className="flex gap-2.5"><MapPin size={17} className="shrink-0 text-brand-700" /> {RESTAURANT.address}</CardBody></Card>
-          <Card><CardBody className="flex gap-2.5"><Phone size={17} className="shrink-0 text-brand-700" /> {RESTAURANT.phone}</CardBody></Card>
-          <Card><CardBody className="flex gap-2.5"><Mail size={17} className="shrink-0 text-brand-700" /> hello@biteandsips.com.gh</CardBody></Card>
-          <Card><CardBody>
+          <Card className="border-0"><CardBody className="flex gap-2.5"><MapPin size={17} className="shrink-0 text-brand-700" /> {RESTAURANT.address}</CardBody></Card>
+          <Card className="border-0"><CardBody className="flex gap-2.5"><Phone size={17} className="shrink-0 text-brand-700" /> {RESTAURANT.phone}</CardBody></Card>
+          <Card className="border-0"><CardBody className="flex gap-2.5"><Mail size={17} className="shrink-0 text-brand-700" /> hello@biteandsips.com.gh</CardBody></Card>
+          <Card className="border-0"><CardBody>
             <p className="flex gap-2.5 font-bold"><Clock size={17} className="shrink-0 text-brand-700" /> Opening hours</p>
             <p className="mt-2 pl-7 text-coal/70">Open daily {hours12h(RESTAURANT.openHour, RESTAURANT.closeHour)}.<br />Kitchen closes 30 minutes before closing. Walk-ins always welcome.</p>
           </CardBody></Card>
-          <Card className="relative overflow-hidden border-transparent text-coal"><CardBody className="relative">
+          <Card className="border-0 relative overflow-hidden border-transparent text-coal"><CardBody className="relative">
             <img src="https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=70" alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" />
             <div className="absolute inset-0 bg-cream/90" aria-hidden="true" />
             <div className="relative">

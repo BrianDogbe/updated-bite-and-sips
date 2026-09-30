@@ -1,32 +1,38 @@
-# React + TypeScript + Vite
+# Bite & Sips — Food Ordering, Delivery & Business Platform (Tema C7, Ghana)
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Customer ordering app + Admin portal + Kitchen Display + Rider app, sharing one
+order/payment/delivery/realtime core.
 
-Currently, two official plugins are available:
+## Run with mock data (no backend)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev        # http://localhost:5173
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Portals: `/admin` · `/kitchen` · `/rider` (demo logins built in).
+
+## Run with the real backend
+
+```bash
+cd server && cp .env.example .env && npm install && npm run dev   # :4000
+cd .. && cp .env.example .env                                     # VITE_API_URL=http://localhost:4000
+npm run dev
+```
+
+Seeded logins — Admin `admin@biteandsips.com` / `admin1234`,
+Kitchen `kitchen@biteandsips.com` / `kitchen1234`,
+Rider `kwame@biteandsips.com` / `rider1234`.
+
+Without `VITE_API_URL`, the frontend runs fully on local mock data.
+
+## Payments (Ghana)
+
+Real providers live in `server/.env` only — never in frontend code:
+
+- **Paystack** (`PAYSTACK_SECRET_KEY`) — cards + all MoMo networks, hosted checkout + server verify
+- **MTN MoMo direct** (`MOMO_SUBSCRIPTION_KEY`, `MOMO_API_USER`, `MOMO_API_KEY`) — request-to-pay phone prompt
+- Cash on delivery/pickup — recorded, no charge
+- No keys → **MOCK** mode (no real money moves)
+
+See `server/README.md` for the full API, realtime events, and Render/Docker deploy guide.

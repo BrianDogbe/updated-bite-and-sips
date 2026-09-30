@@ -174,6 +174,15 @@ export interface NotificationMsg {
   orderId?: string;
 }
 
+export interface ContactMessage {
+  id: string;
+  name: string;
+  email: string;
+  body: string;
+  at: string;
+  read: boolean;
+}
+
 // Realtime event envelope — implemented today over an in-memory bus,
 // swappable for WebSocket/Supabase Realtime/Pusher later.
 export type RealtimeEvent =

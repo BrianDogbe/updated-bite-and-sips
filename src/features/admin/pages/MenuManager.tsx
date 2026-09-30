@@ -56,7 +56,7 @@ export default function MenuManager() {
   return (
     <div className="space-y-4">
       <SectionTitle kicker="Catalogue" title="Menu manager" sub={`${menu.filter((m) => m.available).length} of ${menu.length} items available`} />
-      <Card>
+      <Card className="border-0">
         <CardBody className="flex flex-col gap-2 p-4 md:flex-row md:items-center">
           <div className="flex-1"><Input placeholder="Search menu…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search menu" /></div>
           <div className="flex gap-2">
@@ -75,7 +75,7 @@ export default function MenuManager() {
       {filtered.length === 0 ? (
         <Empty title="No menu items" body="Try a different search." />
       ) : (
-        <Card>
+        <Card className="border-0">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[680px] text-left text-sm">
               <thead>
@@ -129,7 +129,7 @@ export default function MenuManager() {
       {editing && (
         <div className="fixed inset-0 z-40 flex items-center justify-center p-4" role="dialog" aria-label="Edit menu item">
           <div className="absolute inset-0 bg-coal/40" onClick={() => setEditing(null)} />
-          <Card className="relative w-full max-w-sm">
+          <Card className="border-0 relative w-full max-w-sm">
             <CardBody className="space-y-2">
               <h3 className="font-display text-lg font-extrabold">Edit {editing.name}</h3>
               <label className="text-xs font-bold uppercase tracking-wide text-coal/50" htmlFor="edit-name">Name</label>

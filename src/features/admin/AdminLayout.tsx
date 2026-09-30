@@ -1,19 +1,20 @@
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { useState } from 'react';
+import { NavLink, Outlet } from 'react-router-dom';
 import {
-  LayoutDashboard, ShoppingBag, Truck, ChefHat, UtensilsCrossed, Users,
-  Bike, Wallet, Package, Tag, BarChart3, UserCog, ScrollText, Settings,
-  ArrowLeft, Store,
+  LayoutDashboard, ShoppingBag, Truck, UtensilsCrossed, Users,
+  Bike, Wallet, Package, Tag, BarChart3, ScrollText, Settings,
+  Store, LogOut, Eye, EyeOff, Moon, Sun, Mail,
 } from 'lucide-react';
 import { useApp } from '../../shared/store/AppStore';
 import { cn } from '../../lib/utils';
 import { Button } from '../../components/ui/button';
-import { Badge } from '../../components/ui/primitives';
+import { Badge, Input } from '../../components/ui/primitives';
 
 const NAV = [
   { to: '/admin', end: true, label: 'Dashboard', icon: LayoutDashboard },
   { to: '/admin/orders', label: 'Orders', icon: ShoppingBag },
   { to: '/admin/delivery', label: 'Delivery', icon: Truck },
-  { to: '/kitchen', label: 'Kitchen view', icon: ChefHat, external: true },
+  { to: '/admin/messages', label: 'Messages', icon: Mail },
   { to: '/admin/menu', label: 'Menu', icon: UtensilsCrossed },
   { to: '/admin/customers', label: 'Customers', icon: Users },
   { to: '/admin/riders', label: 'Riders', icon: Bike },
@@ -21,13 +22,49 @@ const NAV = [
   { to: '/admin/inventory', label: 'Inventory', icon: Package },
   { to: '/admin/promotions', label: 'Promotions', icon: Tag },
   { to: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
-  { to: '/admin/staff', label: 'Staff', icon: UserCog },
   { to: '/admin/audit', label: 'Audit Logs', icon: ScrollText },
   { to: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 
 export default function AdminLayout() {
-  const { user, login } = useApp();
+  const { user, loginWithPassword, logout, messages } = useApp();
+  const unreadMessages = messages.filter((m) => !m.read).length;
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  // Sign-in is handled by loginWithPassword (backend JWT when VITE_API_URL
+  // is set, strict demo credential otherwise — see the store).
+
+  const [dark, setDark] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('bs_admin_theme') === 'dark';
+    } catch {
+      return false;
+    }
+  });
+  const toggleTheme = () => {
+    setDark((d) => {
+      try {
+        localStorage.setItem('bs_admin_theme', d ? 'light' : 'dark');
+      } catch {
+        /* ignore */
+      }
+      return !d;
+    });
+  };
+
+  const signIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !password) {
+      setFormError('Enter your email and password.');
+      return;
+    }
+    const res = await loginWithPassword(email, password);
+    if (!res.ok) setFormError(res.error ?? 'Login failed.');
+    else setFormError(null);
+  };
 
   if (!user) {
     return (
@@ -37,22 +74,45 @@ export default function AdminLayout() {
             <Store className="h-6 w-6" />
           </div>
           <h1 className="mt-4 font-display text-2xl font-extrabold">Bite &amp; Sips Admin</h1>
-          <p className="mt-1 text-sm text-coal/60">Pick a mock role to enter the business portal.</p>
-          <div className="mt-6 flex flex-col gap-2">
-            <Button onClick={() => login('Abena Owner', 'OWNER')}>Continue as Owner</Button>
-            <Button variant="secondary" onClick={() => login('Kojo Admin', 'ADMIN')}>Continue as Admin</Button>
-            <Button variant="outline" onClick={() => login('Efua Manager', 'MANAGER')}>Continue as Manager</Button>
-          </div>
-          <Link to="/" className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-brand-700 hover:underline">
-            <ArrowLeft className="h-4 w-4" /> Back to site
-          </Link>
+          <p className="mt-1 text-sm text-coal/60">Sign in with your admin email and password.</p>
+          <form onSubmit={signIn} className="mt-6 space-y-3 text-left" noValidate>
+            <div>
+              <label htmlFor="admin-email" className="text-xs font-bold uppercase tracking-wide">Email</label>
+              <Input
+                id="admin-email" type="email" autoComplete="username"
+                value={email} onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@biteandsips.com" className="mt-1"
+              />
+            </div>
+            <div>
+              <label htmlFor="admin-password" className="text-xs font-bold uppercase tracking-wide">Password</label>
+              <div className="relative mt-1">
+                <Input
+                  id="admin-password" type={showPw ? 'text' : 'password'} autoComplete="current-password"
+                  value={password} onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••" className="pr-11"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPw((s) => !s)}
+                  aria-label={showPw ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPw}
+                  className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-coal/50 hover:bg-coal/5"
+                >
+                  {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
+              </div>
+            </div>
+            {formError && <p role="alert" className="text-sm font-semibold text-red-600">{formError}</p>}
+            <Button type="submit" size="lg" className="w-full">Sign in</Button>
+          </form>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-cream text-coal">
+    <div className={cn('flex min-h-screen', dark ? 'admin-dark bg-[#171310] text-[#f4eee7]' : 'bg-cream text-coal')}>
       <aside className="hidden w-60 shrink-0 flex-col border-r border-coal/10 bg-coal text-white lg:flex">
         <div className="flex items-center gap-2 px-5 pb-4 pt-6">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 font-display text-lg font-extrabold">B</div>
@@ -62,31 +122,26 @@ export default function AdminLayout() {
           </div>
         </div>
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-4" aria-label="Admin">
-          {NAV.map((n) =>
-            n.external ? (
-              <Link
-                key={n.label}
-                to={n.to}
-                className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-white/60 hover:bg-white/10 hover:text-white"
-              >
-                <n.icon className="h-4 w-4" /> {n.label}
-              </Link>
-            ) : (
-              <NavLink
-                key={n.label}
-                to={n.to}
-                end={n.end}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors',
-                    isActive ? 'bg-brand-600 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white',
-                  )
-                }
-              >
-                <n.icon className="h-4 w-4" /> {n.label}
-              </NavLink>
-            ),
-          )}
+          {NAV.map((n) => (
+            <NavLink
+              key={n.label}
+              to={n.to}
+              end={n.end}
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors',
+                  isActive ? 'bg-brand-600 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white',
+                )
+              }
+            >
+              <n.icon className="h-4 w-4" /> {n.label}
+              {n.label === 'Messages' && unreadMessages > 0 && (
+                <span className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-brand-600 px-1.5 text-[11px] font-extrabold text-white">
+                  {unreadMessages}
+                </span>
+              )}
+            </NavLink>
+          ))}
         </nav>
         <div className="border-t border-white/10 p-4 text-xs text-white/50">
           <p className="font-semibold text-white/80">{user.name}</p>
@@ -110,15 +165,34 @@ export default function AdminLayout() {
                 }
               >
                 {n.label}
+                {n.label === 'Messages' && unreadMessages > 0 && (
+                  <span className="ml-1 inline-grid h-4 min-w-4 place-items-center rounded-full bg-brand-600 px-1 text-[10px] font-extrabold text-white">
+                    {unreadMessages}
+                  </span>
+                )}
               </NavLink>
             ))}
           </div>
           <div className="ml-auto flex items-center gap-2">
             <Badge className="bg-leaf/10 text-leaf">{user.role}</Badge>
-            <span className="hidden text-sm font-medium text-coal/70 sm:inline">{user.name}</span>
-            <Link to="/" className="inline-flex items-center gap-1 rounded-xl border border-coal/15 bg-white px-3 py-2 text-xs font-bold hover:bg-cream">
-              <ArrowLeft className="h-3.5 w-3.5" /> Back to site
-            </Link>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-pressed={dark}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-coal/15 bg-white px-3 py-2 text-xs font-bold hover:bg-cream"
+            >
+              {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+              <span className="hidden sm:inline">{dark ? 'Light' : 'Dark'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={logout}
+              aria-label="Log out of admin portal"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-coal/15 bg-white px-3 py-2 text-xs font-bold hover:bg-cream"
+            >
+              <LogOut className="h-3.5 w-3.5" /> Log out
+            </button>
           </div>
         </header>
         <main className="min-w-0 flex-1 p-4 md:p-6">

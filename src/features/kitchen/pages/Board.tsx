@@ -75,11 +75,11 @@ function playBeep(): void {
 
 type ColKey = 'NEW' | 'PREPARING' | 'READY' | 'DONE';
 
-const COLS: { key: ColKey; title: string; hint: string }[] = [
-  { key: 'NEW', title: 'New', hint: 'Pending + Confirmed' },
-  { key: 'PREPARING', title: 'Preparing', hint: 'In the kitchen' },
-  { key: 'READY', title: 'Ready', hint: 'Ready + rider assigned' },
-  { key: 'DONE', title: 'Completed', hint: 'Handed over today' },
+const COLS: { key: ColKey; title: string; hint: string; dot: string; pill: string }[] = [
+  { key: 'NEW', title: 'New', hint: 'Pending + Confirmed', dot: 'bg-gold', pill: 'bg-gold/15 text-yellow-800' },
+  { key: 'PREPARING', title: 'Preparing', hint: 'In the kitchen', dot: 'bg-brand-600', pill: 'bg-brand-600/10 text-brand-700' },
+  { key: 'READY', title: 'Ready', hint: 'Ready + rider assigned', dot: 'bg-leaf', pill: 'bg-leaf/10 text-leaf' },
+  { key: 'DONE', title: 'Completed', hint: 'Handed over today', dot: 'bg-coal/40', pill: 'bg-coal/5 text-coal/60' },
 ];
 
 function colOf(o: Order): ColKey | null {
@@ -141,10 +141,18 @@ export function Board() {
       const c = colOf(o);
       if (c) g[c].push(o);
     }
-    const byAge = (a: Order, b: Order) => +new Date(a.createdAt) - +new Date(b.createdAt);
-    (Object.keys(g) as ColKey[]).forEach((k) => g[k].sort(byAge));
+    // Urgent tickets first, then oldest — so the pass always sees what matters.
+    const rank = (o: Order) => (isUrgent(o, nowMs) ? 0 : 1);
+    const byPriority = (a: Order, b: Order) =>
+      rank(a) - rank(b) || +new Date(a.createdAt) - +new Date(b.createdAt);
+    (Object.keys(g) as ColKey[]).forEach((k) => g[k].sort(byPriority));
     return g;
-  }, [orders]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, nowMs]);
+
+  const [urgentOnly, setUrgentOnly] = useState(false);
+  const visible = (key: ColKey): Order[] =>
+    urgentOnly ? grouped[key].filter((o) => isUrgent(o, nowMs)) : grouped[key];
 
   const act = (id: string, status: OrderStatus, label: string) => {
     updateOrderStatus(id, status, user?.name ?? 'kitchen');
@@ -152,6 +160,7 @@ export function Board() {
   };
 
   const totalActive = grouped.NEW.length + grouped.PREPARING.length + grouped.READY.length;
+  const urgentCount = [...grouped.NEW, ...grouped.PREPARING, ...grouped.READY].filter((o) => isUrgent(o, nowMs)).length;
 
   return (
     <div>
@@ -181,36 +190,57 @@ export function Board() {
         )}
       </AnimatePresence>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2 text-white/70" aria-live="polite">
-        <Timer className="h-4 w-4" aria-hidden />
-        <p className="text-sm font-semibold">
-          {totalActive === 0 ? 'No active orders — kitchen is clear.' : `${totalActive} active order${totalActive === 1 ? '' : 's'} on the board.`}
-        </p>
+      {/* Pass overview strip */}
+      <div className="mb-4 flex flex-wrap items-center gap-2" aria-live="polite">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-coal px-4 py-2 text-sm font-extrabold text-white">
+          <Timer className="h-4 w-4" aria-hidden />
+          {totalActive === 0 ? 'Kitchen clear' : `${totalActive} active`}
+        </span>
+        {(['NEW', 'PREPARING', 'READY'] as ColKey[]).map((k) => (
+          <span key={k} className="inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2 text-xs font-bold text-coal/70">
+            <span className={cn('h-2.5 w-2.5 rounded-full', COLS.find((c) => c.key === k)?.dot)} aria-hidden />
+            {k === 'NEW' ? 'New' : k === 'PREPARING' ? 'Preparing' : 'Ready'} · {grouped[k].length}
+          </span>
+        ))}
+        <button
+          type="button"
+          onClick={() => setUrgentOnly((v) => !v)}
+          aria-pressed={urgentOnly}
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-extrabold uppercase tracking-wide transition-colors',
+            urgentOnly ? 'bg-red-600 text-white' : 'bg-red-50 text-red-700',
+          )}
+        >
+          <Flame className="h-3.5 w-3.5" aria-hidden /> Urgent · {urgentCount}
+        </button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {COLS.map((c) => (
-          <section key={c.key} aria-label={`${c.title} orders`} className="min-w-0">
-            <div className="mb-3 flex items-baseline justify-between gap-2">
-              <div>
-                <h2 className="font-display text-lg font-extrabold uppercase tracking-wide">{c.title}</h2>
-                <p className="text-xs font-semibold text-white/50">{c.hint}</p>
+          <section key={c.key} aria-label={`${c.title} orders`} className="min-w-0 rounded-3xl bg-white/70 p-3">
+            <div className="mb-3 flex items-center justify-between gap-2 px-1">
+              <div className="flex items-center gap-2">
+                <span className={cn('h-3 w-3 rounded-full', c.dot)} aria-hidden />
+                <div>
+                  <h2 className="font-display text-base font-extrabold uppercase tracking-wide leading-tight">{c.title}</h2>
+                  <p className="text-[11px] font-semibold text-coal/50">{c.hint}</p>
+                </div>
               </div>
               <span
-                className="rounded-full bg-white/15 px-3 py-1 font-display text-lg font-extrabold tabular-nums"
-                aria-label={`${grouped[c.key].length} orders in ${c.title}`}
+                className={cn('rounded-full px-3 py-1 font-display text-lg font-extrabold tabular-nums', c.pill)}
+                aria-label={`${visible(c.key).length} orders in ${c.title}`}
               >
-                {grouped[c.key].length}
+                {visible(c.key).length}
               </span>
             </div>
 
             <div className="flex flex-col gap-3">
-              {grouped[c.key].length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-white/20 bg-white/5 p-6 text-center">
-                  <p className="text-sm font-bold text-white/60">No active orders</p>
+              {visible(c.key).length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-coal/15 bg-white p-6 text-center">
+                  <p className="text-sm font-bold text-coal/50">{urgentOnly ? 'No urgent tickets' : 'No active orders'}</p>
                 </div>
               ) : (
-                grouped[c.key].map((o) => {
+                visible(c.key).map((o) => {
                   const urgent = isUrgent(o, nowMs);
                   const countdown = pickupCountdown(o.pickupTime, nowMs);
                   return (
@@ -220,8 +250,8 @@ export function Board() {
                       initial={{ opacity: 0, scale: 0.97 }}
                       animate={{ opacity: 1, scale: 1 }}
                       className={cn(
-                        'rounded-2xl border-2 bg-white p-4 text-coal shadow-card',
-                        urgent ? 'border-red-500' : 'border-transparent',
+                        'rounded-2xl bg-white p-4 text-coal shadow-card',
+                        urgent && 'border-2 border-red-500',
                       )}
                     >
                       <div className="flex items-start justify-between gap-2">

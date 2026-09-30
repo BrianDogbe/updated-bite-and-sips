@@ -71,7 +71,7 @@ export default function MenuPage() {
             const added = addedId === m.id;
             return (
               <li key={m.id}>
-                <Card className={!m.available ? 'opacity-75' : ''}>
+                <Card className={cn('border-0', !m.available && 'opacity-75')}>
                   <div className="relative">
                     <Link to={`/menu/${m.id}`} aria-label={`View ${m.name}`}>
                       <img src={m.image} alt={m.name} loading="lazy" className="h-52 w-full rounded-t-2xl object-cover" />

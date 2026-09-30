@@ -1,18 +1,20 @@
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
-  Address, AuditEntry, CartLine, MenuItem, NotificationMsg, Order, OrderStatus,
+  Address, AuditEntry, CartLine, ContactMessage, MenuItem, NotificationMsg, Order, OrderStatus,
   Promotion, Rider, User,
 } from '../types';
 import { MENU, PROMOTIONS, INITIAL_RIDERS, RESTAURANT, INVENTORY_SEED } from '../data';
 import type { InventoryItem } from '../types';
 import { deliveryFeeForKm, haversineKm, serviceFee } from '../services/delivery';
 import { publish, subscribe } from '../services/realtime';
+import { api, backendEnabled, connectBackendSocket, setToken } from '../services/backend';
 
 interface Totals { subtotal: number; deliveryFee: number; serviceFee: number; discount: number; total: number; km: number }
 
 interface AppState {
   user: User | null;
   login: (name: string, role?: User['role']) => void;
+  loginWithPassword: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
   menu: MenuItem[];
   setAvailability: (id: string, available: boolean) => void;
@@ -30,8 +32,9 @@ interface AppState {
   setActiveAddress: (a: Address | null) => void;
   addAddress: (a: Address) => void;
   orders: Order[];
-  placeOrder: (o: Omit<Order, 'id' | 'createdAt' | 'updatedAt' | 'timeline'>) => Order;
+  placeOrder: (o: Omit<Order, 'id' | 'createdAt' | 'updatedAt' | 'timeline'>) => Promise<Order>;
   updateOrderStatus: (id: string, status: OrderStatus, by?: string) => void;
+  markOrderPaid: (id: string) => void;
   assignRider: (orderId: string, riderId: string) => void;
   riders: Rider[];
   setRiderOnline: (id: string, online: boolean) => void;
@@ -41,6 +44,10 @@ interface AppState {
   notifications: NotificationMsg[];
   pushNotification: (title: string, body: string, orderId?: string) => void;
   markAllRead: () => void;
+  messages: ContactMessage[];
+  addMessage: (m: { name: string; email: string; body: string }) => void;
+  markMessageRead: (id: string) => void;
+  deleteMessage: (id: string) => void;
   audit: AuditEntry[];
   logAudit: (user: string, action: string, resource: string, prev?: string, next?: string) => void;
   inventory: InventoryItem[];
@@ -83,6 +90,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<NotificationMsg[]>([
     { id: 'n1', title: 'Welcome to Bite & Sips', body: 'Use WELCOME15 for 15% off your first order.', at: now(), read: false },
   ]);
+  const [messages, setMessages] = useState<ContactMessage[]>(() => {
+    try {
+      const raw = localStorage.getItem('bs_messages');
+      if (raw) return JSON.parse(raw) as ContactMessage[];
+    } catch {
+      /* ignore */
+    }
+    return [
+      { id: 'msg1', name: 'Ama Serwaa', email: 'ama@example.com', body: 'Do you cater office lunches for 30 people on Fridays?', at: now(), read: false },
+      { id: 'msg2', name: 'Kwesi Osei', email: 'kwesi@example.com', body: 'My rider was very polite. The jollof arrived hot — thank you!', at: now(), read: true },
+    ];
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('bs_messages', JSON.stringify(messages));
+    } catch {
+      /* ignore */
+    }
+  }, [messages]);
   const [audit, setAudit] = useState<AuditEntry[]>([
     { id: 'a1', user: 'System', action: 'Seeded demo data', resource: 'orders', at: now() },
   ]);
@@ -94,10 +120,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('bs_user', JSON.stringify(user));
   }, [user]);
 
-  // realtime inbound
+  // realtime inbound (dedupe: optimistic updates + socket events may both arrive)
   useEffect(() => subscribe((e) => {
     if (e.type === 'ORDER_STATUS') {
-      setOrders((prev) => prev.map((o) => (o.id === e.orderId ? { ...o, status: e.status, updatedAt: e.at, timeline: [...o.timeline, { status: e.status, at: e.at }] } : o)));
+      setOrders((prev) => prev.map((o) => {
+        if (o.id !== e.orderId) return o;
+        const last = o.timeline[o.timeline.length - 1];
+        if (last?.status === e.status) return { ...o, status: e.status, updatedAt: e.at };
+        return { ...o, status: e.status, updatedAt: e.at, timeline: [...o.timeline, { status: e.status, at: e.at }] };
+      }));
     } else if (e.type === 'ORDER_CREATED') {
       setOrders((prev) => (prev.some((o) => o.id === e.order.id) ? prev : [e.order, ...prev]));
     } else if (e.type === 'RIDER_LOCATION') {
@@ -107,9 +138,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }), []);
 
-  // mock rider movement for active deliveries
+  // mock rider movement for active deliveries (backend mode uses real GPS via socket)
   useEffect(() => {
     const t = setInterval(() => {
+      if (backendEnabled()) return;
       setOrders((prev) => {
         const active = prev.find((o) => o.status === 'OUT_FOR_DELIVERY' && o.riderId);
         if (!active?.deliveryAddress || !active.riderId) return prev;
@@ -123,10 +155,65 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(t);
   }, [riderLocations]);
 
-  const login = useCallback((name: string, role: User['role'] = 'CUSTOMER') => {
-    setUser({ id: 'u_' + Math.random().toString(36).slice(2, 7), name, phone: '+233 24 000 0000', role, active: true });
+  // Backend sync: menu once, staff data on staff login, socket events into the bus.
+  useEffect(() => {
+    if (!backendEnabled()) return;
+    api<MenuItem[]>('/api/menu').then(setMenu).catch(() => {});
+    return connectBackendSocket((e) => publish(e));
   }, []);
-  const logout = useCallback(() => setUser(null), []);
+  useEffect(() => {
+    if (!backendEnabled() || !user || user.role === 'CUSTOMER') return;
+    api<Order[]>('/api/orders', { auth: true }).then(setOrders).catch(() => {});
+    api<Rider[]>('/api/riders', { auth: true }).then(setRiders).catch(() => {});
+    api<ContactMessage[]>('/api/messages', { auth: true }).then(setMessages).catch(() => {});
+    api<InventoryItem[]>('/api/inventory', { auth: true }).then(setInventory).catch(() => {});
+  }, [user]);
+
+  // Demo credentials for the portal auto-logins (real users sign in via loginWithPassword)
+  const DEMO_CREDS: Record<string, { email: string; password: string }> = useMemo(() => ({
+    'Kwame Mensah': { email: 'kwame@biteandsips.com', password: 'rider1234' },
+    'Kitchen Staff': { email: 'kitchen@biteandsips.com', password: 'kitchen1234' },
+  }), []);
+
+  const login = useCallback((name: string, role: User['role'] = 'CUSTOMER') => {
+    if (backendEnabled() && DEMO_CREDS[name]) {
+      const creds = DEMO_CREDS[name];
+      api<{ token: string; user: { id: string; name: string; email: string; role: User['role']; phone?: string } }>(
+        '/api/auth/login', { method: 'POST', body: { email: creds.email, password: creds.password } },
+      ).then((res) => {
+        setToken(res.token);
+        setUser({ id: res.user.id, name: res.user.name, email: res.user.email, phone: res.user.phone ?? '', role: res.user.role, active: true });
+      }).catch(() => {
+        setUser({ id: 'u_' + Math.random().toString(36).slice(2, 7), name, phone: '+233 24 000 0000', role, active: true });
+      });
+      return;
+    }
+    setUser({ id: 'u_' + Math.random().toString(36).slice(2, 7), name, phone: '+233 24 000 0000', role, active: true });
+  }, [DEMO_CREDS]);
+  const logout = useCallback(() => {
+    setToken(null);
+    setUser(null);
+  }, []);
+
+  const loginWithPassword = useCallback(async (email: string, password: string): Promise<{ ok: boolean; error?: string }> => {
+    const clean = email.trim().toLowerCase();
+    if (backendEnabled()) {
+      try {
+        const res = await api<{ token: string; user: { id: string; name: string; email: string; role: User['role']; phone?: string } }>(
+          '/api/auth/login', { method: 'POST', body: { email: clean, password } },
+        );
+        setToken(res.token);
+        setUser({ id: res.user.id, name: res.user.name, email: res.user.email, phone: res.user.phone ?? '', role: res.user.role, active: true });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Login failed' };
+      }
+    }
+    if (clean !== 'admin@biteandsips.com') return { ok: false, error: 'Incorrect email.' };
+    if (password !== 'admin1234') return { ok: false, error: 'Incorrect password.' };
+    setUser({ id: 'u_admin', name: 'Admin', email: clean, phone: '', role: 'ADMIN', active: true });
+    return { ok: true };
+  }, []);
 
   const setAvailability = useCallback((id: string, available: boolean) => {
     setMenu((m) => m.map((x) => (x.id === id ? { ...x, available } : x)));
@@ -201,7 +288,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setAudit((a) => [{ id: 'log' + Date.now(), user: userN, action, resource, prev, next, at: now() }, ...a]);
   }, []);
 
-  const placeOrder: AppState['placeOrder'] = useCallback((o) => {
+  const placeOrder: AppState['placeOrder'] = useCallback(async (o) => {
+    if (backendEnabled()) {
+      try {
+        const distanceKm = o.deliveryAddress
+          ? haversineKm(RESTAURANT.lat, RESTAURANT.lng, o.deliveryAddress.lat, o.deliveryAddress.lng)
+          : 0;
+        const serverOrder = await api<Order>('/api/orders', {
+          method: 'POST',
+          body: {
+            customerId: o.customerId,
+            customerName: o.customerName,
+            customerPhone: o.customerPhone,
+            items: o.items.map((it) => ({ itemId: it.itemId, qty: it.qty, modifiers: it.modifiers, instructions: it.instructions })),
+            orderType: o.orderType,
+            paymentMethod: o.paymentMethod,
+            paymentStatus: o.paymentStatus,
+            deliveryAddress: o.deliveryAddress ?? undefined,
+            pickupTime: o.pickupTime ?? undefined,
+            pickupMode: o.pickupMode ?? undefined,
+            distanceKm,
+            promoCode: promoCode.current || undefined,
+          },
+        });
+        setOrders((prev) => (prev.some((x) => x.id === serverOrder.id) ? prev : [serverOrder, ...prev]));
+        publish({ type: 'ORDER_CREATED', order: serverOrder });
+        pushNotification('Order received', `Order ${serverOrder.id} placed. Total GH₵${serverOrder.total.toFixed(2)}.`, serverOrder.id);
+        setCart([]);
+        promoCode.current = '';
+        return serverOrder;
+      } catch {
+        // fall through to local mock so the order is never lost
+      }
+    }
     const id = `BS${orderSeq++}`;
     const order: Order = { ...o, id, createdAt: now(), updatedAt: now(), timeline: [{ status: 'PENDING', at: now() }] };
     setOrders((prev) => [order, ...prev]);
@@ -215,12 +334,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [pushNotification]);
 
   const updateOrderStatus = useCallback((id: string, status: OrderStatus, by?: string) => {
-    publish({ type: 'ORDER_STATUS', orderId: id, status, at: now() });
+    if (backendEnabled()) {
+      api(`/api/orders/${id}/status`, { method: 'PATCH', auth: true, body: { status, by } }).catch(() => {
+        publish({ type: 'ORDER_STATUS', orderId: id, status, at: now() });
+      });
+    } else {
+      publish({ type: 'ORDER_STATUS', orderId: id, status, at: now() });
+    }
     const o = orders.find((x) => x.id === id);
     if (o) logAudit(by ?? 'staff', `Marked ${id} as ${status}`, 'orders', o.status, status);
   }, [orders, logAudit]);
 
+  const markOrderPaid = useCallback((id: string) => {
+    setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, paymentStatus: 'PAID' as const, updatedAt: now() } : o)));
+  }, []);
+
   const assignRider = useCallback((orderId: string, riderId: string) => {
+    if (backendEnabled()) {
+      api(`/api/orders/${orderId}/assign`, { method: 'PATCH', auth: true, body: { riderId } }).catch(() => {});
+    }
     setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, riderId } : o)));
     publish({ type: 'RIDER_ASSIGNED', orderId, riderId });
     setRiders((prev) => prev.map((r) => (r.id === riderId ? { ...r, busy: true } : r)));
@@ -231,16 +363,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const markAllRead = useCallback(() => setNotifications((n) => n.map((x) => ({ ...x, read: true }))), []);
+
+  const addMessage = useCallback((m: { name: string; email: string; body: string }) => {
+    if (backendEnabled()) {
+      api<ContactMessage>('/api/messages', { method: 'POST', body: m })
+        .then((saved) => {
+          setMessages((prev) => (prev.some((x) => x.id === saved.id) ? prev : [saved, ...prev]));
+          pushNotification('New customer message', `${m.name}: ${m.body.slice(0, 60)}`);
+        })
+        .catch(() => {
+          const msg: ContactMessage = { id: 'msg' + Date.now(), ...m, at: now(), read: false };
+          setMessages((prev) => [msg, ...prev]);
+          pushNotification('New customer message', `${m.name}: ${m.body.slice(0, 60)}`);
+        });
+      return;
+    }
+    const msg: ContactMessage = { id: 'msg' + Date.now(), ...m, at: now(), read: false };
+    setMessages((prev) => [msg, ...prev]);
+    pushNotification('New customer message', `${m.name}: ${m.body.slice(0, 60)}`);
+  }, [pushNotification]);
+  const markMessageRead = useCallback((id: string) => {
+    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, read: true } : m)));
+  }, []);
+  const deleteMessage = useCallback((id: string) => {
+    setMessages((prev) => prev.filter((m) => m.id !== id));
+  }, []);
   const adjustStock = useCallback((id: string, delta: number) => {
     setInventory((inv) => inv.map((x) => (x.id === id ? { ...x, qty: Math.max(0, x.qty + delta) } : x)));
   }, []);
 
   const value: AppState = {
-    user, login, logout, menu, setAvailability, upsertMenuItem, cart, addToCart, updateQty,
+    user, login, loginWithPassword, logout, menu, setAvailability, upsertMenuItem, cart, addToCart, updateQty,
     removeLine, clearCart, cartCount, favorites, toggleFav, addresses, activeAddress,
-    setActiveAddress, addAddress, orders, placeOrder, updateOrderStatus, assignRider,
+    setActiveAddress, addAddress, orders, placeOrder, updateOrderStatus, markOrderPaid, assignRider,
     riders, setRiderOnline, promos, applyPromo, calcTotals, notifications, pushNotification,
-    markAllRead, audit, logAudit, inventory, adjustStock, riderLocations,
+    markAllRead, messages, addMessage, markMessageRead, deleteMessage, audit, logAudit, inventory, adjustStock, riderLocations,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

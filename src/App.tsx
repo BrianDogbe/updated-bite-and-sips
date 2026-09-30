@@ -1,6 +1,7 @@
 import { Outlet, createBrowserRouter, RouterProvider, Link } from 'react-router-dom';
 import CustomerNavbar from './components/layout/CustomerNavbar';
 import Footer from './components/layout/Footer';
+import ScrollToTop from './components/common/ScrollToTop';
 import HomePage from './features/customer/pages/HomePage';
 import MenuPage from './features/customer/pages/MenuPage';
 import ItemPage from './features/customer/pages/ItemPage';
@@ -14,7 +15,7 @@ import DeliveryPage from './features/admin/pages/DeliveryPage';
 import MenuManager from './features/admin/pages/MenuManager';
 import {
   CustomersPage, RidersPage, FinancePage, InventoryPage, PromotionsPage,
-  AnalyticsPage, StaffPage, AuditPage, SettingsPage,
+  AnalyticsPage, AuditPage, SettingsPage, MessagesPage,
 } from './features/admin/pages/OpsPages';
 import KitchenLayout from './features/kitchen/KitchenLayout';
 import { Board } from './features/kitchen/pages/Board';
@@ -26,6 +27,7 @@ import { HistoryPage, EarningsPage, ProfilePage } from './features/rider/pages/R
 function CustomerShell() {
   return (
     <div className="min-h-screen">
+      <ScrollToTop />
       <CustomerNavbar />
       <main>
         <Outlet />
@@ -68,6 +70,7 @@ const router = createBrowserRouter([
       { index: true, element: <Dashboard /> },
       { path: 'orders', element: <AdminOrdersPage /> },
       { path: 'delivery', element: <DeliveryPage /> },
+      { path: 'messages', element: <MessagesPage /> },
       { path: 'menu', element: <MenuManager /> },
       { path: 'customers', element: <CustomersPage /> },
       { path: 'riders', element: <RidersPage /> },
@@ -75,7 +78,6 @@ const router = createBrowserRouter([
       { path: 'inventory', element: <InventoryPage /> },
       { path: 'promotions', element: <PromotionsPage /> },
       { path: 'analytics', element: <AnalyticsPage /> },
-      { path: 'staff', element: <StaffPage /> },
       { path: 'audit', element: <AuditPage /> },
       { path: 'settings', element: <SettingsPage /> },
     ],

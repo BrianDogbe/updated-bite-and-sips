@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Bike, Briefcase, History, LogOut, User, Wallet } from 'lucide-react';
+import { Link, NavLink, Outlet } from 'react-router-dom';
+import { Bike, Briefcase, History, User, Wallet } from 'lucide-react';
 import { useApp } from '../../shared/store/AppStore';
 import { cn } from '../../lib/utils';
+import ScrollToTop from '../../components/common/ScrollToTop';
 
 const TABS = [
   { to: '/rider', end: true, label: 'Jobs', icon: Briefcase },
@@ -17,8 +18,7 @@ export function useMockRider() {
 }
 
 export default function RiderLayout() {
-  const { user, login, logout, orders, riders, setRiderOnline } = useApp();
-  const location = useLocation();
+  const { user, login, orders, riders, setRiderOnline } = useApp();
 
   // Mock rider login (demo mode)
   useEffect(() => {
@@ -35,11 +35,10 @@ export default function RiderLayout() {
       )
     : undefined;
 
-  const onProfileTab = location.pathname.startsWith('/rider/profile');
-
   return (
     <div className="min-h-screen bg-cream text-coal">
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-cream shadow-card">
+        <ScrollToTop />
         <header className="sticky top-0 z-30 border-b border-coal/10 bg-coal text-white">
           <div className="flex items-center gap-3 px-4 py-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-600" aria-hidden>
@@ -81,16 +80,6 @@ export default function RiderLayout() {
 
         <main className="flex-1 px-4 pb-28 pt-4">
           <Outlet />
-          {onProfileTab && (
-            <button
-              type="button"
-              onClick={logout}
-              aria-label="Log out of rider app"
-              className="mt-6 inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl border border-coal/15 bg-white text-sm font-bold"
-            >
-              <LogOut className="h-4 w-4" aria-hidden /> Log out
-            </button>
-          )}
         </main>
 
         <nav

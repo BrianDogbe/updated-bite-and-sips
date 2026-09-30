@@ -5,7 +5,8 @@ import { ArrowLeft, ArrowRight, Bike, Check, Loader2, MapPin, ShoppingBag, Store
 import { useApp } from '../../../shared/store/AppStore';
 import { RESTAURANT } from '../../../shared/data';
 import { GHS, cn, formatTime12h, hours12h, uid } from '../../../lib/utils';
-import { initializePayment, verifyPayment, PAYMENT_LABELS } from '../../../shared/services/payments';
+import { initializePayment, verifyPayment, linkPaymentToOrder, PAYMENT_LABELS } from '../../../shared/services/payments';
+import { backendEnabled } from '../../../shared/services/backend';
 import { getCurrentPositionMock } from '../../../shared/services/maps';
 import { useToast } from '../../../components/ui/toaster';
 import { Badge, Card, CardBody, Empty, Input, SectionTitle } from '../../../components/ui/primitives';
@@ -28,7 +29,7 @@ function todayAt(time: string): Date {
 }
 
 export default function CheckoutPage() {
-  const { cart, updateQty, removeLine, activeAddress, addresses, setActiveAddress, addAddress, calcTotals, applyPromo, placeOrder, user } = useApp();
+  const { cart, updateQty, removeLine, activeAddress, addresses, setActiveAddress, addAddress, calcTotals, applyPromo, placeOrder, markOrderPaid, user } = useApp();
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -162,17 +163,27 @@ export default function CheckoutPage() {
     try {
       const isCash = effectivePayment === 'CASH_ON_DELIVERY' || effectivePayment === 'CASH_ON_PICKUP';
       let paymentStatus: 'PAID' | 'PENDING' | 'FAILED' = 'PENDING';
+      let payRef: string | undefined;
       if (!isCash) {
         const intent = await initializePayment(totals.total, effectivePayment);
-        paymentStatus = await verifyPayment(intent.reference);
-        if (paymentStatus !== 'PAID') throw new Error('Payment failed. Please try another method.');
+        payRef = intent.reference;
+        if (intent.payUrl) {
+          // Real provider checkout (e.g. Paystack): complete payment in the new tab,
+          // then we verify with the server below.
+          window.open(intent.payUrl, '_blank', 'noopener');
+          toast({ title: 'Complete payment', body: 'Finish payment in the opened tab, then wait here.', kind: 'info' });
+        }
+        if (!backendEnabled()) {
+          paymentStatus = await verifyPayment(intent.reference);
+          if (paymentStatus !== 'PAID') throw new Error('Payment failed. Please try another method.');
+        }
       }
       const pickupISO = (() => {
         if (pickupMode === 'ASAP') return new Date(Date.now() + 25 * 60_000).toISOString();
         return todayAt(schedTime).toISOString();
       })();
       const otp = String(Math.floor(1000 + Math.random() * 9000));
-      const order = placeOrder({
+      const order = await placeOrder({
         customerId: user?.id ?? 'guest',
         customerName: user?.name ?? 'Guest',
         customerPhone: user?.phone ?? '+233 24 000 0000',
@@ -194,7 +205,15 @@ export default function CheckoutPage() {
         deliveryAddress: orderType === 'DELIVERY' ? (activeAddress ?? undefined) : undefined,
         deliveryCode: otp,
       });
-      toast({ title: 'Order placed', body: `Order ${order.id} · OTP ${otp}`, kind: 'success' });
+      if (backendEnabled() && payRef && !isCash) {
+        await linkPaymentToOrder(payRef, order.id);
+        paymentStatus = await verifyPayment(payRef);
+        if (paymentStatus !== 'PAID') {
+          throw new Error('Payment not completed yet. Your order is saved — complete the payment prompt, then track your order.');
+        }
+        markOrderPaid(order.id);
+      }
+      toast({ title: 'Order placed', body: `Order ${order.id} · OTP ${order.deliveryCode ?? otp}`, kind: 'success' });
       navigate(`/track/${order.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not place order.');

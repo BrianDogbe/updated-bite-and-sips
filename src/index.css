@@ -45,3 +45,27 @@ h1,h2,h3,.font-display { font-family: "Sora", ui-sans-serif, system-ui, sans-ser
     linear-gradient(90deg, rgba(20,18,16,.07) 1px, transparent 1px);
   background-size: 36px 36px;
 }
+
+/* ── Admin dark mode (scoped: only inside .admin-dark) ── */
+.admin-dark { color-scheme: dark; }
+.admin-dark .bg-white { background-color: #241f1b; }
+.admin-dark .bg-white\/90 { background-color: rgba(36, 31, 27, 0.92); }
+.admin-dark .bg-cream { background-color: #2e2823; }
+.admin-dark .bg-coal\/5 { background-color: rgba(255, 255, 255, 0.06); }
+.admin-dark .bg-coal\/8 { background-color: rgba(255, 255, 255, 0.09); }
+.admin-dark .bg-coal\/10 { background-color: rgba(255, 255, 255, 0.11); }
+.admin-dark .bg-red-50 { background-color: rgba(220, 38, 38, 0.16); }
+.admin-dark .text-coal { color: #f4eee7; }
+.admin-dark .text-coal\/45 { color: rgba(244, 238, 231, 0.48); }
+.admin-dark .text-coal\/50 { color: rgba(244, 238, 231, 0.55); }
+.admin-dark .text-coal\/55 { color: rgba(244, 238, 231, 0.62); }
+.admin-dark .text-coal\/60 { color: rgba(244, 238, 231, 0.68); }
+.admin-dark .text-coal\/70 { color: rgba(244, 238, 231, 0.78); }
+.admin-dark .border-coal\/5 { border-color: rgba(255, 255, 255, 0.08); }
+.admin-dark .border-coal\/10 { border-color: rgba(255, 255, 255, 0.13); }
+.admin-dark .border-coal\/15 { border-color: rgba(255, 255, 255, 0.18); }
+.admin-dark .divide-coal\/10 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.12); }
+.admin-dark .hover\:bg-cream:hover { background-color: rgba(255, 255, 255, 0.09); }
+.admin-dark .hover\:bg-coal\/5:hover { background-color: rgba(255, 255, 255, 0.09); }
+.admin-dark .hover\:bg-coal\/10:hover { background-color: rgba(255, 255, 255, 0.13); }
+.admin-dark input, .admin-dark textarea, .admin-dark select { color-scheme: dark; }

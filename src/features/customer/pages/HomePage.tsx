@@ -242,7 +242,7 @@ export default function HomePage() {
           <div className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
             {popular.map((m, i) => (
               <motion.div key={m.id} initial={{ opacity: 0, y: 18 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: (i % 8) * 0.05 }} className="h-full">
-                <Card className="flex h-full flex-col overflow-hidden">
+                <Card className="flex h-full flex-col overflow-hidden border-0">
                   <Link to={`/menu/${m.id}`} aria-label={`Browse ${m.name}`} className="block">
                     <img src={m.image} alt={m.name} className="h-44 w-full object-cover transition hover:scale-[1.03]" loading="lazy" />
                   </Link>

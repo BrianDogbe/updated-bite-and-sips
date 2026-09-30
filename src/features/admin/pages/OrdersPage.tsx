@@ -44,7 +44,7 @@ export default function OrdersPage() {
   return (
     <div className="space-y-4">
       <SectionTitle kicker="Sales" title="Orders" sub={`${filtered.length} of ${orders.length} orders`} />
-      <Card>
+      <Card className="border-0">
         <CardBody className="flex flex-col gap-2 p-4 md:flex-row">
           <div className="flex-1"><Input placeholder="Search by id, customer, phone…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search orders" /></div>
           <select value={status} onChange={(e) => setStatus(e.target.value as OrderStatus | 'ALL')} className="h-11 rounded-xl border border-coal/15 bg-white px-3 text-sm" aria-label="Status filter">
@@ -61,7 +61,7 @@ export default function OrdersPage() {
       {filtered.length === 0 ? (
         <Empty title="No orders found" body="Try clearing search or filters." />
       ) : (
-        <Card>
+        <Card className="border-0">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-left text-sm">
               <thead>

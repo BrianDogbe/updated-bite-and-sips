@@ -31,7 +31,7 @@ export default function DeliveryPage() {
         ) : (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {active.map((o) => (
-              <Card key={o.id}>
+              <Card key={o.id} className="border-0">
                 <CardBody className="p-4 text-sm">
                   <div className="flex items-center justify-between">
                     <p className="font-extrabold">{o.id}</p>
@@ -52,7 +52,7 @@ export default function DeliveryPage() {
         {unassigned.length === 0 ? (
           <Empty title="All caught up" body="Every delivery order has a rider." />
         ) : (
-          <Card>
+          <Card className="border-0">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] text-left text-sm">
                 <thead>
@@ -108,7 +108,7 @@ export default function DeliveryPage() {
         <h3 className="mb-2 font-display text-base font-extrabold">Rider availability</h3>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {riders.map((r) => (
-            <Card key={r.id}>
+            <Card key={r.id} className="border-0">
               <CardBody className="flex items-center justify-between p-4 text-sm">
                 <div>
                   <p className="font-bold">{r.name}</p>
