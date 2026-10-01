@@ -177,6 +177,7 @@ export function Board() {
   };
 
   const onlineRiders = riders.filter((r) => r.online);
+  const sortedRiders = [...riders].sort((a, b) => Number(b.online) - Number(a.online));
 
   const totalActive = grouped.NEW.length + grouped.PREPARING.length + grouped.READY.length;
   const urgentCount = [...grouped.NEW, ...grouped.PREPARING, ...grouped.READY].filter((o) => isUrgent(o, nowMs)).length;
@@ -343,17 +344,29 @@ export function Board() {
                             <label htmlFor={`rider-${o.id}`} className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wide text-coal/60">
                               <Bike size={14} /> Hand to rider
                             </label>
-                            <select
-                              id={`rider-${o.id}`}
-                              value={riderPick[o.id] ?? ''}
-                              onChange={(e) => setRiderPick((p) => ({ ...p, [o.id]: e.target.value }))}
-                              className="h-12 w-full rounded-xl border border-coal/15 bg-white px-3 text-sm font-semibold"
-                            >
-                              <option value="">Select rider…</option>
-                              {onlineRiders.map((r) => (
-                                <option key={r.id} value={r.id}>{r.name}{r.busy ? ' (busy)' : ''}</option>
-                              ))}
-                            </select>
+                            {riders.length === 0 ? (
+                              <p className="rounded-xl bg-white p-3 text-xs font-semibold text-coal/55">
+                                No riders found. Check the connection, then reload this page.
+                              </p>
+                            ) : (
+                              <select
+                                id={`rider-${o.id}`}
+                                value={riderPick[o.id] ?? ''}
+                                onChange={(e) => setRiderPick((p) => ({ ...p, [o.id]: e.target.value }))}
+                                className="h-12 w-full rounded-xl border border-coal/15 bg-white px-3 text-sm font-semibold"
+                              >
+                                <option value="">
+                                  {onlineRiders.length > 0
+                                    ? `Select rider… (${onlineRiders.length} online)`
+                                    : 'All riders offline — ask one to go online'}
+                                </option>
+                                {sortedRiders.map((r) => (
+                                  <option key={r.id} value={r.id} disabled={!r.online}>
+                                    {r.name}{r.online ? (r.busy ? ' (busy)' : '') : ' (offline)'}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
                             <Button
                               size="lg"
                               onClick={() => handToRider(o.id)}

@@ -178,23 +178,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
   useEffect(() => {
     if (!backendEnabled() || !user || user.role === 'CUSTOMER') return;
-    // Staff list sync. If the server is unreachable (or we hold no token),
-    // fall back to the full mock dataset so every board keeps flowing.
-    const mockFallback = () => {
-      if (isBackendReachable() && getToken()) return;
-      setOrders(seedOrders);
-      setRiders(INITIAL_RIDERS);
-      setMessages(seedMockMessages());
-      setInventory(INVENTORY_SEED);
-    };
+    // Staff list sync. Any list that fails to load falls back to mock seeds
+    // when empty — boards must never go blank (offline server, expired token…).
     if (!getToken()) {
-      mockFallback();
+      if (!isBackendReachable()) {
+        setOrders(seedOrders);
+        setRiders(INITIAL_RIDERS);
+        setMessages(seedMockMessages());
+        setInventory(INVENTORY_SEED);
+      }
       return;
     }
-    api<Order[]>('/api/orders', { auth: true }).then(setOrders).catch(mockFallback);
-    api<Rider[]>('/api/riders', { auth: true }).then(setRiders).catch(mockFallback);
-    api<ContactMessage[]>('/api/messages', { auth: true }).then(setMessages).catch(mockFallback);
-    api<InventoryItem[]>('/api/inventory', { auth: true }).then(setInventory).catch(mockFallback);
+      return;
+    }
+    api<Order[]>('/api/orders', { auth: true }).then(setOrders).catch(() =>
+      setOrders((prev) => (prev.length > 0 ? prev : seedOrders)),
+    );
+    api<Rider[]>('/api/riders', { auth: true }).then(setRiders).catch(() =>
+      setRiders((prev) => (prev.length > 0 ? prev : INITIAL_RIDERS)),
+    );
+    api<ContactMessage[]>('/api/messages', { auth: true }).then(setMessages).catch(() =>
+      setMessages((prev) => (prev.length > 0 ? prev : seedMockMessages())),
+    );
+    api<InventoryItem[]>('/api/inventory', { auth: true }).then(setInventory).catch(() =>
+      setInventory((prev) => (prev.length > 0 ? prev : INVENTORY_SEED)),
+    );
   }, [user]);
 
   // Demo credentials for the portal auto-logins (real users sign in via loginWithPassword)
