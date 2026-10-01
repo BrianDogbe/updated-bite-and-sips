@@ -12,7 +12,8 @@ import { useApp } from '../../../shared/store/AppStore';
 import { GHS, cn } from '../../../lib/utils';
 import { Card, CardBody, Badge, Empty } from '../../../components/ui/primitives';
 
-const ACTIVE = new Set(['CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'RIDER_ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY']);
+const ACTIVE = new Set(['CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP',
+'RIDER_ASSIGNED', 'ARRIVED_AT_RESTAURANT', 'PICKED_UP', 'OUT_FOR_DELIVERY']);
 
 function last7Days(): { key: string; label: string }[] {
   const out: { key: string; label: string }[] = [];

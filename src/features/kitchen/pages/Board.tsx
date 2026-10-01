@@ -91,6 +91,7 @@ function colOf(o: Order): ColKey | null {
       return 'PREPARING';
     case 'READY_FOR_PICKUP':
     case 'RIDER_ASSIGNED':
+    case 'ARRIVED_AT_RESTAURANT':
       return 'READY';
     case 'PICKED_UP':
     case 'OUT_FOR_DELIVERY':
@@ -363,7 +364,7 @@ export function Board() {
                             </Button>
                           </div>
                         )}
-                        {((o.status === 'READY_FOR_PICKUP' && o.orderType === 'PICKUP') || o.status === 'RIDER_ASSIGNED') && (
+                        {((o.status === 'READY_FOR_PICKUP' && o.orderType === 'PICKUP') || o.status === 'RIDER_ASSIGNED' || o.status === 'ARRIVED_AT_RESTAURANT') && (
                           <Button
                             size="lg"
                             variant="secondary"

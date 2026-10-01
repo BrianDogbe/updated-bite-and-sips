@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { randomInt } from 'node:crypto';
 import type { SQLInputValue } from 'node:sqlite';
 import { db, toOrder, nextOrderId, logAudit } from '../db.js';
-import { requireAuth, STAFF } from '../auth.js';
+import { requireAuth, optionalUser, samePhone, rateLimit, STAFF } from '../auth.js';
 import type { AuthedRequest } from '../auth.js';
 import { emit } from '../realtime.js';
 
@@ -22,7 +22,8 @@ const TRANSITIONS: Record<string, string[]> = {
   CONFIRMED: ['PREPARING', 'CANCELLED'],
   PREPARING: ['READY_FOR_PICKUP', 'CANCELLED'],
   READY_FOR_PICKUP: ['RIDER_ASSIGNED', 'PICKED_UP', 'CANCELLED'],
-  RIDER_ASSIGNED: ['PICKED_UP', 'CANCELLED'],
+  RIDER_ASSIGNED: ['ARRIVED_AT_RESTAURANT', 'PICKED_UP', 'CANCELLED'],
+  ARRIVED_AT_RESTAURANT: ['PICKED_UP', 'CANCELLED'],
   PICKED_UP: ['OUT_FOR_DELIVERY', 'DELIVERED'],
   OUT_FOR_DELIVERY: ['DELIVERED'],
   DELIVERED: [],
@@ -33,8 +34,8 @@ function feeForKm(km: number): number {
   return (FEE_BANDS.find((b) => km >= b.minKm && km < b.maxKm) ?? FEE_BANDS[FEE_BANDS.length - 1]).fee;
 }
 
-// POST /api/orders — public (guest checkout). Server recomputes all money.
-r.post('/', (req, res) => {
+// POST /api/orders — public (guest checkout), rate-limited. Server recomputes all money.
+r.post('/', rateLimit(60, 60_000), (req, res) => {
   const b = req.body as {
     customerName?: string; customerPhone?: string; customerId?: string;
     items?: Array<{ itemId: string; qty: number; modifiers?: Array<{ id: string; name: string; price: number }>; instructions?: string }>;
@@ -124,12 +125,23 @@ r.get('/', requireAuth([...STAFF, 'RIDER']), (req: AuthedRequest, res) => {
   res.json(rows.map(toOrder));
 });
 
-// GET /api/orders/:id — public (needed for live tracking links)
+// GET /api/orders/:id — staff/rider token, or the order's phone number.
+// Tracking links are safe to share: without the phone, no customer data leaks.
 r.get('/:id', (req, res) => {
   const row = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
   if (!row) {
     res.status(404).json({ error: 'Not found' });
     return;
+  }
+  const me = optionalUser(req);
+  const staffOrRider = me && (STAFF.includes(me.role) || me.role === 'RIDER');
+  if (!staffOrRider) {
+    const phone = String(req.query.phone ?? '');
+    const customerPhone = String((row as { customer_phone?: string }).customer_phone ?? '');
+    if (!samePhone(customerPhone, phone)) {
+      res.status(403).json({ error: 'Enter the phone number used for this order' });
+      return;
+    }
   }
   res.json(toOrder(row));
 });

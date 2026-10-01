@@ -46,7 +46,8 @@ export function ActiveDelivery() {
     const s = order.status;
     const doneSet = (statuses: string[]) => statuses.includes(s);
     return [
-      { label: 'Accepted', done: doneSet(['RIDER_ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED']) },
+      { label: 'Accepted', done: doneSet(['RIDER_ASSIGNED', 'ARRIVED_AT_RESTAURANT', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED']) },
+      { label: 'Arrived', done: doneSet(['ARRIVED_AT_RESTAURANT', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED']) },
       { label: 'Picked up', done: doneSet(['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED']) },
       { label: 'On the way', done: doneSet(['OUT_FOR_DELIVERY', 'DELIVERED']) },
       { label: 'Delivered', done: s === 'DELIVERED' },
@@ -71,6 +72,11 @@ export function ActiveDelivery() {
   const dest = order.deliveryAddress;
   const expectedCode = order.deliveryCode ?? '';
   const otpOk = expectedCode === '' || otp.trim() === expectedCode;
+
+  const arrived = () => {
+    updateOrderStatus(order.id, 'ARRIVED_AT_RESTAURANT', by);
+    toast({ title: `Arrived at restaurant`, body: 'Show the staff your order number to collect it.', kind: 'success' });
+  };
 
   const pickedUp = () => {
     updateOrderStatus(order.id, 'PICKED_UP', by);
@@ -203,6 +209,11 @@ export function ActiveDelivery() {
 
       {/* Pickup / trip actions */}
       {(order.status === 'READY_FOR_PICKUP' || order.status === 'RIDER_ASSIGNED') && (
+        <Button size="lg" onClick={order.status === 'RIDER_ASSIGNED' ? arrived : pickedUp} aria-label={order.status === 'RIDER_ASSIGNED' ? `Confirm arrival at restaurant for order ${order.id}` : `Confirm pickup for order ${order.id}`} className="min-h-[60px] w-full text-lg">
+          <CheckCheck className="h-5 w-5" aria-hidden /> {order.status === 'RIDER_ASSIGNED' ? 'I’ve arrived' : 'I’ve picked up'}
+        </Button>
+      )}
+      {order.status === 'ARRIVED_AT_RESTAURANT' && (
         <Button size="lg" onClick={pickedUp} aria-label={`Confirm pickup for order ${order.id}`} className="min-h-[60px] w-full text-lg">
           <CheckCheck className="h-5 w-5" aria-hidden /> I’ve picked up
         </Button>

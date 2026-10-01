@@ -61,6 +61,14 @@ const Ctx = createContext<AppState | null>(null);
 let orderSeq = 1024;
 const now = () => new Date().toISOString();
 
+/** Mock inbox seeds (mock mode, or backend unreachable). */
+function seedMockMessages(): ContactMessage[] {
+  return [
+    { id: 'msg1', name: 'Ama Serwaa', email: 'ama@example.com', body: 'Do you cater office lunches for 30 people on Fridays?', at: now(), read: false },
+    { id: 'msg2', name: 'Kwesi Osei', email: 'kwesi@example.com', body: 'My rider was very polite. The jollof arrived hot — thank you!', at: now(), read: true },
+  ];
+}
+
 const seedAddresses: Address[] = [
   { id: 'a1', label: 'Home', street: 'Plot 12, Community 7', city: 'Tema', lat: 5.662, lng: -0.008, isDefault: true },
 ];
@@ -104,10 +112,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch {
       /* ignore */
     }
-    return [
-      { id: 'msg1', name: 'Ama Serwaa', email: 'ama@example.com', body: 'Do you cater office lunches for 30 people on Fridays?', at: now(), read: false },
-      { id: 'msg2', name: 'Kwesi Osei', email: 'kwesi@example.com', body: 'My rider was very polite. The jollof arrived hot — thank you!', at: now(), read: true },
-    ];
+    return seedMockMessages();
   });
   useEffect(() => {
     try {
@@ -173,10 +178,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
   useEffect(() => {
     if (!backendEnabled() || !user || user.role === 'CUSTOMER') return;
-    api<Order[]>('/api/orders', { auth: true }).then(setOrders).catch(() => {});
-    api<Rider[]>('/api/riders', { auth: true }).then(setRiders).catch(() => {});
-    api<ContactMessage[]>('/api/messages', { auth: true }).then(setMessages).catch(() => {});
-    api<InventoryItem[]>('/api/inventory', { auth: true }).then(setInventory).catch(() => {});
+    // Staff list sync. If the server is unreachable (or we hold no token),
+    // fall back to the full mock dataset so every board keeps flowing.
+    const mockFallback = () => {
+      if (isBackendReachable() && getToken()) return;
+      setOrders(seedOrders);
+      setRiders(INITIAL_RIDERS);
+      setMessages(seedMockMessages());
+      setInventory(INVENTORY_SEED);
+    };
+    if (!getToken()) {
+      mockFallback();
+      return;
+    }
+    api<Order[]>('/api/orders', { auth: true }).then(setOrders).catch(mockFallback);
+    api<Rider[]>('/api/riders', { auth: true }).then(setRiders).catch(mockFallback);
+    api<ContactMessage[]>('/api/messages', { auth: true }).then(setMessages).catch(mockFallback);
+    api<InventoryItem[]>('/api/inventory', { auth: true }).then(setInventory).catch(mockFallback);
   }, [user]);
 
   // Demo credentials for the portal auto-logins (real users sign in via loginWithPassword)

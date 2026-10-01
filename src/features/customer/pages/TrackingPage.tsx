@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Bike, Check, KeyRound, Phone, ReceiptText, Star } from 'lucide-react';
 import { useApp } from '../../../shared/store/AppStore';
 import { RESTAURANT } from '../../../shared/data';
@@ -13,7 +13,7 @@ import Breadcrumbs from '../../../components/common/Breadcrumbs';
 import MockMap from '../../../components/common/MockMap';
 import type { Order, OrderStatus } from '../../../shared/types';
 
-const DELIVERY_FLOW: OrderStatus[] = ['PENDING', 'CONFIRMED', 'PREPARING', 'RIDER_ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'];
+const DELIVERY_FLOW: OrderStatus[] = ['PENDING', 'CONFIRMED', 'PREPARING', 'RIDER_ASSIGNED', 'ARRIVED_AT_RESTAURANT', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'];
 const PICKUP_FLOW: OrderStatus[] = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'DELIVERED'];
 
 const LABELS: Record<OrderStatus, string> = {
@@ -22,6 +22,7 @@ const LABELS: Record<OrderStatus, string> = {
   PREPARING: 'Preparing',
   READY_FOR_PICKUP: 'Ready for pickup',
   RIDER_ASSIGNED: 'Rider assigned',
+  ARRIVED_AT_RESTAURANT: 'Rider at restaurant',
   PICKED_UP: 'Picked up',
   OUT_FOR_DELIVERY: 'Out for delivery',
   DELIVERED: 'Delivered',
@@ -32,6 +33,7 @@ const LABELS: Record<OrderStatus, string> = {
 export function TrackLookup() {
   const navigate = useNavigate();
   const [code, setCode] = useState('');
+  const [phone, setPhone] = useState('');
   const [lastOrder] = useState<string | null>(() => {
     try {
       return localStorage.getItem('bs_last_order');
@@ -42,7 +44,9 @@ export function TrackLookup() {
   const go = (e: React.FormEvent) => {
     e.preventDefault();
     const id = code.trim().toUpperCase();
-    if (id) navigate(`/track/${id}`);
+    if (!id) return;
+    // Phone unlocks orders placed on other devices (server verifies it).
+    navigate(phone.trim() ? `/track/${id}?phone=${encodeURIComponent(phone.trim())}` : `/track/${id}`);
   };
   return (
     <main className="container py-24">
@@ -50,13 +54,20 @@ export function TrackLookup() {
       <div className="mx-auto max-w-xl text-center">
         <SectionTitle kicker="Tracking" title="Where's my food?" sub="Enter the order number from your confirmation." />
         <Card className="mt-6 border-0"><CardBody className="p-6">
-          <form onSubmit={go} className="flex gap-2">
-            <label htmlFor="track-code" className="sr-only">Order number</label>
+          <form onSubmit={go} className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <label htmlFor="track-code" className="sr-only">Order number</label>
+              <Input
+                id="track-code" value={code} onChange={(e) => setCode(e.target.value)}
+                placeholder="e.g. BS1024" className="uppercase" autoComplete="off"
+              />
+              <Button type="submit">Track <ArrowRight /></Button>
+            </div>
+            <label htmlFor="track-phone" className="sr-only">Phone number used for the order</label>
             <Input
-              id="track-code" value={code} onChange={(e) => setCode(e.target.value)}
-              placeholder="e.g. BS1024" className="uppercase" autoComplete="off"
+              id="track-phone" value={phone} onChange={(e) => setPhone(e.target.value)}
+              placeholder="Phone number used for the order" inputMode="tel" autoComplete="tel"
             />
-            <Button type="submit">Track <ArrowRight /></Button>
           </form>
           {lastOrder && (
             <button
@@ -74,22 +85,61 @@ export function TrackLookup() {
 
 export default function TrackingPage() {
   const { id } = useParams<{ id: string }>();
+  const [search] = useSearchParams();
   const { orders, riders, riderLocations } = useApp();
   const order = useMemo(() => orders.find((o) => o.id === id), [orders, id]);
+  const [gateError, setGateError] = useState<string | null>(null);
+  const [gatePhone, setGatePhone] = useState('');
 
-  // Order placed on another device? Pull it from the server once, then
-  // live socket updates keep it fresh like any local order.
+  // Order placed on another device? Pull it from the server once (phone-gated),
+  // then live socket updates keep it fresh like any local order.
+  const fetchRemote = (phone: string) => {
+    if (!id || !backendEnabled()) return;
+    setGateError(null);
+    api<Order>(`/api/orders/${encodeURIComponent(id)}?phone=${encodeURIComponent(phone)}`)
+      .then((o) => publish({ type: 'ORDER_CREATED', order: o }))
+      .catch(() => setGateError('Could not open this order — check the number and phone used at checkout.'));
+  };
   useEffect(() => {
     if (order || !id || !backendEnabled()) return;
-    api<Order>(`/api/orders/${encodeURIComponent(id)}`)
-      .then((o) => publish({ type: 'ORDER_CREATED', order: o }))
-      .catch(() => {});
+    const phone = search.get('phone') ?? '';
+    if (phone) fetchRemote(phone);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order, id]);
 
   if (!order) {
+    // Backend mode without the order locally: ask for the checkout phone to unlock it.
+    if (backendEnabled()) {
+      return (
+        <main className="container py-24">
+          <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Track order' }]} />
+          <div className="mx-auto max-w-xl text-center">
+            <SectionTitle kicker="Tracking" title={`Order ${id ?? ''}`} sub="Enter the phone number used at checkout to unlock live tracking." />
+            <Card className="mt-6 border-0"><CardBody className="p-6">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (gatePhone.trim()) fetchRemote(gatePhone.trim());
+                }}
+                className="flex gap-2"
+              >
+                <label htmlFor="gate-phone" className="sr-only">Checkout phone number</label>
+                <Input
+                  id="gate-phone" value={gatePhone} onChange={(e) => setGatePhone(e.target.value)}
+                  placeholder="Phone number used for the order" inputMode="tel" autoComplete="tel"
+                />
+                <Button type="submit">Unlock <ArrowRight /></Button>
+              </form>
+              {gateError && <p role="alert" className="mt-2 text-sm font-semibold text-red-600">{gateError}</p>}
+              <Link to="/track" className="mt-4 inline-block text-sm font-bold text-brand-700">← Try a different order</Link>
+            </CardBody></Card>
+          </div>
+        </main>
+      );
+    }
     return (
       <main className="container py-24">
-        <Empty title="Order not found" body={`No order with ID ${id ?? ''}.`} />
+        <Empty title="Order not found" body={`No order with ID ${id ?? ''} on this device.`} />
         <Link to="/menu" className="mt-4 inline-block text-sm font-bold text-brand-700">← Back to menu</Link>
       </main>
     );

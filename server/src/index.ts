@@ -7,6 +7,7 @@ import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 import { ensureSchema, seedIfEmpty } from './db.js';
 import { setIO } from './realtime.js';
+import { rateLimit } from './auth.js';
 import authRoutes from './routes/auth.js';
 import menuRoutes from './routes/menu.js';
 import orderRoutes from './routes/orders.js';
@@ -36,8 +37,20 @@ ensureSchema();
 seedIfEmpty();
 
 const app = express();
+app.disable('x-powered-by');
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'geolocation=(self)');
+  next();
+});
 app.use(cors({ origin: ORIGIN_CHECK, credentials: true }));
 app.use(express.json({ limit: '1mb' }));
+
+// Brute-force guards (in-memory, per IP)
+app.use('/api/auth/login', rateLimit(10, 15 * 60_000));
+app.use('/api/payments/initialize', rateLimit(30, 60_000));
 
 app.get('/api/health', (_req, res) => {
   const mock = !process.env.PAYSTACK_SECRET_KEY && !process.env.MOMO_SUBSCRIPTION_KEY;
