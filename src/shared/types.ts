@@ -74,6 +74,7 @@ export type OrderStatus =
   | 'ARRIVED_AT_RESTAURANT'
   | 'PICKED_UP'
   | 'OUT_FOR_DELIVERY'
+  | 'ARRIVED_AT_CUSTOMER'
   | 'DELIVERED'
   | 'CANCELLED';
 

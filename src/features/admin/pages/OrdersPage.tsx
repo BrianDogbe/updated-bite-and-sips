@@ -6,7 +6,7 @@ import { GHS, cn, format12h } from '../../../lib/utils';
 import { Button } from '../../../components/ui/button';
 import { Card, CardBody, Badge, Input, Empty, SectionTitle } from '../../../components/ui/primitives';
 
-const STATUSES: (OrderStatus | 'ALL')[] = ['ALL', 'PENDING', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'RIDER_ASSIGNED', 'ARRIVED_AT_RESTAURANT', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
+const STATUSES: (OrderStatus | 'ALL')[] = ['ALL', 'PENDING', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'RIDER_ASSIGNED', 'ARRIVED_AT_RESTAURANT', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER', 'DELIVERED', 'CANCELLED'];
 
 function statusStyle(s: OrderStatus): string {
   if (s === 'DELIVERED') return 'bg-leaf/10 text-leaf';

@@ -95,6 +95,7 @@ function colOf(o: Order): ColKey | null {
       return 'READY';
     case 'PICKED_UP':
     case 'OUT_FOR_DELIVERY':
+    case 'ARRIVED_AT_CUSTOMER':
     case 'DELIVERED':
       return isToday(o.updatedAt) ? 'DONE' : null;
     default:
@@ -297,6 +298,18 @@ export function Board() {
                       <p className="mt-1 text-xs font-semibold text-coal/60">
                         {o.customerName} · {GHS(o.total)}
                       </p>
+                      {o.orderType === 'DELIVERY' && (o.status === 'READY_FOR_PICKUP' || o.status === 'RIDER_ASSIGNED' || o.status === 'ARRIVED_AT_RESTAURANT') && (
+                        <p
+                          role="status"
+                          className={o.riderId
+                            ? 'mt-1.5 rounded-lg bg-leaf/10 px-2.5 py-1.5 text-xs font-extrabold text-leaf'
+                            : 'mt-1.5 animate-pulse rounded-lg bg-gold/15 px-2.5 py-1.5 text-xs font-extrabold text-yellow-800'}
+                        >
+                          {o.riderId
+                            ? `✓ ${riders.find((r) => r.id === o.riderId)?.name ?? 'Rider'} confirmed — awaiting pickup`
+                            : '⏳ Waiting for a rider to accept…'}
+                        </p>
+                      )}
 
                       <ul className="mt-3 space-y-2 border-t border-coal/10 pt-3">
                         {o.items.map((it, i) => (

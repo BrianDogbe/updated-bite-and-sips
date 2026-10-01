@@ -13,7 +13,7 @@ import { GHS, cn } from '../../../lib/utils';
 import { Card, CardBody, Badge, Empty } from '../../../components/ui/primitives';
 
 const ACTIVE = new Set(['CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP',
-'RIDER_ASSIGNED', 'ARRIVED_AT_RESTAURANT', 'PICKED_UP', 'OUT_FOR_DELIVERY']);
+'RIDER_ASSIGNED', 'ARRIVED_AT_RESTAURANT', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER']);
 
 function last7Days(): { key: string; label: string }[] {
   const out: { key: string; label: string }[] = [];

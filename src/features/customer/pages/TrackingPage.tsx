@@ -13,7 +13,7 @@ import Breadcrumbs from '../../../components/common/Breadcrumbs';
 import MockMap from '../../../components/common/MockMap';
 import type { Order, OrderStatus } from '../../../shared/types';
 
-const DELIVERY_FLOW: OrderStatus[] = ['PENDING', 'CONFIRMED', 'PREPARING', 'RIDER_ASSIGNED', 'ARRIVED_AT_RESTAURANT', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'];
+const DELIVERY_FLOW: OrderStatus[] = ['PENDING', 'CONFIRMED', 'PREPARING', 'RIDER_ASSIGNED', 'ARRIVED_AT_RESTAURANT', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER', 'DELIVERED'];
 const PICKUP_FLOW: OrderStatus[] = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'DELIVERED'];
 
 const LABELS: Record<OrderStatus, string> = {
@@ -23,6 +23,7 @@ const LABELS: Record<OrderStatus, string> = {
   READY_FOR_PICKUP: 'Ready for pickup',
   RIDER_ASSIGNED: 'Rider assigned',
   ARRIVED_AT_RESTAURANT: 'Rider at restaurant',
+  ARRIVED_AT_CUSTOMER: 'Arrived at your door',
   PICKED_UP: 'Picked up',
   OUT_FOR_DELIVERY: 'Out for delivery',
   DELIVERED: 'Delivered',

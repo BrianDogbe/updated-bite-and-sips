@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Bike, MapPin, Navigation, Phone, Store } from 'lucide-react';
 import { useApp } from '../../../shared/store/AppStore';
 import { useToast } from '../../../components/ui/toaster';
@@ -31,6 +32,27 @@ export function Jobs() {
   useEffect(() => {
     refreshOrders();
   }, [refreshOrders]);
+
+  // Pop-up banner the moment the kitchen hands an order to me.
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const knownMine = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!me) return;
+    const mineIds = new Set(
+      orders.filter((o) => o.riderId === me.id && ['READY_FOR_PICKUP', 'RIDER_ASSIGNED'].includes(o.status)).map((o) => o.id),
+    );
+    if (knownMine.current === null) {
+      knownMine.current = mineIds;
+      return;
+    }
+    const fresh = [...mineIds].find((id) => !knownMine.current?.has(id));
+    knownMine.current = mineIds;
+    if (fresh) {
+      setFlashId(fresh);
+      const t = setTimeout(() => setFlashId((f) => (f === fresh ? null : f)), 12000);
+      return () => clearTimeout(t);
+    }
+  }, [orders, me]);
 
   if (!me) {
     return <Empty title="No riders available" body="Ask dispatch to register a rider account, then try again." />;
@@ -69,6 +91,28 @@ export function Jobs() {
 
   return (
     <div className="flex flex-col gap-5">
+      <AnimatePresence>
+        {flashId && (
+          <motion.div
+            key={flashId}
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            role="alert"
+          >
+            <Link
+              to={`/rider/active/${flashId}`}
+              className="flex items-center gap-3 rounded-2xl bg-brand-600 p-4 text-white shadow-card"
+            >
+              <Bike className="h-6 w-6 shrink-0" aria-hidden />
+              <span>
+                <span className="block font-display font-extrabold">New delivery: #{flashId}</span>
+                <span className="block text-xs text-white/80">Kitchen handed it to you — tap to open</span>
+              </span>
+            </Link>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div>
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-600">Available jobs</p>
         <h1 className="mt-0.5 font-display text-2xl font-extrabold">Deliveries near you</h1>

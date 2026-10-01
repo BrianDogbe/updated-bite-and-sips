@@ -8,6 +8,7 @@ import { Button } from '../../../components/ui/button';
 import { Badge, Card, CardBody, Empty } from '../../../components/ui/primitives';
 import { GHS, cn } from '../../../lib/utils';
 import { RESTAURANT } from '../../../shared/data';
+import { fetchRoadRoute, type RoadRoute } from '../../../shared/services/maps';
 import { useMockRider } from '../RiderLayout';
 
 function mapsLink(lat: number, lng: number): string {
@@ -30,6 +31,24 @@ export function ActiveDelivery() {
   const order = orders.find((o) => o.id === id);
   const [otp, setOtp] = useState('');
   const [otpError, setOtpError] = useState<string | null>(null);
+  const [road, setRoad] = useState<RoadRoute | null>(null);
+
+  // Turn-by-turn directions to the customer (real road route, OSRM).
+  useEffect(() => {
+    setRoad(null);
+    if (!order?.deliveryAddress) return;
+    let live = true;
+    fetchRoadRoute(
+      { lat: RESTAURANT.lat, lng: RESTAURANT.lng },
+      { lat: order.deliveryAddress.lat, lng: order.deliveryAddress.lng },
+    ).then((r) => {
+      if (live) setRoad(r);
+    });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.id]);
 
   // Mock route progress — simulated while OUT_FOR_DELIVERY
   const [progress, setProgress] = useState(8);
@@ -46,10 +65,11 @@ export function ActiveDelivery() {
     const s = order.status;
     const doneSet = (statuses: string[]) => statuses.includes(s);
     return [
-      { label: 'Accepted', done: doneSet(['RIDER_ASSIGNED', 'ARRIVED_AT_RESTAURANT', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED']) },
-      { label: 'Arrived', done: doneSet(['ARRIVED_AT_RESTAURANT', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED']) },
-      { label: 'Picked up', done: doneSet(['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED']) },
-      { label: 'On the way', done: doneSet(['OUT_FOR_DELIVERY', 'DELIVERED']) },
+      { label: 'Accepted', done: doneSet(['RIDER_ASSIGNED', 'ARRIVED_AT_RESTAURANT', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER', 'DELIVERED']) },
+      { label: 'At restaurant', done: doneSet(['ARRIVED_AT_RESTAURANT', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER', 'DELIVERED']) },
+      { label: 'Picked up', done: doneSet(['PICKED_UP', 'OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER', 'DELIVERED']) },
+      { label: 'On the way', done: doneSet(['OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER', 'DELIVERED']) },
+      { label: 'At door', done: doneSet(['ARRIVED_AT_CUSTOMER', 'DELIVERED']) },
       { label: 'Delivered', done: s === 'DELIVERED' },
     ];
   }, [order]);
@@ -76,6 +96,10 @@ export function ActiveDelivery() {
   const arrived = () => {
     updateOrderStatus(order.id, 'ARRIVED_AT_RESTAURANT', by);
     toast({ title: `Arrived at restaurant`, body: 'Show the staff your order number to collect it.', kind: 'success' });
+  };
+  const arrivedCustomer = () => {
+    updateOrderStatus(order.id, 'ARRIVED_AT_CUSTOMER', by);
+    toast({ title: `Arrived at customer`, body: 'Ask for the delivery code to complete handover.', kind: 'success' });
   };
 
   const pickedUp = () => {
@@ -217,8 +241,46 @@ export function ActiveDelivery() {
         </CardBody>
       </Card>
 
-      {/* Pickup / trip actions */}
-      {order.status === 'READY_FOR_PICKUP' && order.riderId === me?.id && (
+      {/* Turn-by-turn directions to the customer */}
+      {dest && (
+        <Card>
+          <CardBody>
+            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-coal/50">
+              <Navigation className="h-4 w-4" aria-hidden /> Directions to customer
+            </p>
+            {road ? (
+              <>
+                <p className="mt-2 text-sm font-extrabold">
+                  {road.distanceKm.toFixed(1)} km · ~{Math.max(1, Math.round(road.durationMin))} min by road
+                </p>
+                <ol className="mt-2 space-y-1.5">
+                  {road.steps.slice(0, 6).map((s, i) => (
+                    <li key={i} className="flex justify-between gap-3 text-sm">
+                      <span><b className="mr-1.5 text-coal/40">{i + 1}.</b>{s.instruction}</span>
+                      <span className="shrink-0 text-xs font-semibold text-coal/55 tabular-nums">
+                        {s.distanceM >= 1000 ? `${(s.distanceM / 1000).toFixed(1)} km` : `${s.distanceM} m`}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </>
+            ) : (
+              <p className="mt-2 text-sm text-coal/60">Loading road directions… (needs internet; otherwise use Navigate below)</p>
+            )}
+            <a
+              href={mapsLink(dest.lat, dest.lng)}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Navigate to customer in Google Maps"
+              className="mt-3 inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-coal text-sm font-bold text-white"
+            >
+              <Navigation className="h-4 w-4" aria-hidden /> Navigate to customer
+            </a>
+          </CardBody>
+        </Card>
+      )}
+
+      {/* Pickup / trip actions */}      {order.status === 'READY_FOR_PICKUP' && order.riderId === me?.id && (
         <>
           <Button size="lg" onClick={confirmHandover} aria-label={`Accept and confirm delivery ${order.id}`} className="min-h-[60px] w-full text-lg">
             <CheckCheck className="h-5 w-5" aria-hidden /> Accept & confirm
@@ -252,9 +314,14 @@ export function ActiveDelivery() {
           <Navigation className="h-5 w-5" aria-hidden /> Start delivery trip
         </Button>
       )}
+      {order.status === 'OUT_FOR_DELIVERY' && (
+        <Button size="lg" variant="leaf" onClick={arrivedCustomer} aria-label={`Confirm arrival at customer for order ${order.id}`} className="min-h-[60px] w-full text-lg">
+          <CheckCheck className="h-5 w-5" aria-hidden /> I’ve arrived
+        </Button>
+      )}
 
       {/* Mock route progress */}
-      {(order.status === 'OUT_FOR_DELIVERY' || order.status === 'PICKED_UP') && (
+      {(order.status === 'OUT_FOR_DELIVERY' || order.status === 'PICKED_UP' || order.status === 'ARRIVED_AT_CUSTOMER') && (
         <Card>
           <CardBody>
             <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest text-coal/50">
@@ -283,7 +350,7 @@ export function ActiveDelivery() {
       )}
 
       {/* OTP + delivered */}
-      {(order.status === 'OUT_FOR_DELIVERY' || order.status === 'PICKED_UP') && (
+      {(order.status === 'OUT_FOR_DELIVERY' || order.status === 'PICKED_UP' || order.status === 'ARRIVED_AT_CUSTOMER') && (
         <Card className="border-brand-600/30">
           <CardBody>
             <p className="text-xs font-bold uppercase tracking-widest text-coal/50">Delivery code (OTP)</p>

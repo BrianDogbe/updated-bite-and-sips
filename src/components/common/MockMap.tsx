@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { routePoints, toXY } from '../../shared/services/maps';
+import { useEffect, useMemo, useState } from 'react';
+import { fetchRoadRoute, routePoints, toXY, type LatLng as MapLatLng, type RoadRoute } from '../../shared/services/maps';
 
 interface LatLng {
   lat: number;
@@ -41,6 +41,35 @@ export default function MockMap({ restaurant, customer, rider, showRoute = true 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showRoute, customer?.lat, customer?.lng, restaurant.lat, restaurant.lng, bounds]);
 
+  // Real road route (OSRM). Falls back to the straight dashed line when offline.
+  const [road, setRoad] = useState<RoadRoute | null>(null);
+  useEffect(() => {
+    if (!showRoute || !customer) {
+      setRoad(null);
+      return;
+    }
+    let live = true;
+    const from: MapLatLng = { lat: restaurant.lat, lng: restaurant.lng };
+    const to: MapLatLng = { lat: customer.lat, lng: customer.lng };
+    fetchRoadRoute(from, to).then((r) => {
+      if (live) setRoad(r);
+    });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showRoute, customer?.lat, customer?.lng, restaurant.lat, restaurant.lng]);
+
+  const roadLine = useMemo(() => {
+    if (!road) return '';
+    return road.coords
+      .map((p) => {
+        const { x, y } = toXY(p, bounds);
+        return `${x.toFixed(2)},${(y / 100) * 62}`;
+      })
+      .join(' ');
+  }, [road, bounds]);
+
   return (
     <figure className="overflow-hidden rounded-2xl border border-coal/10 bg-white shadow-card">
       <svg viewBox="0 0 100 62" className="block h-64 w-full" role="img" aria-label="Mock delivery map">
@@ -57,7 +86,11 @@ export default function MockMap({ restaurant, customer, rider, showRoute = true 
         <line x1="0" y1="44" x2="100" y2="40" stroke="#141210" strokeOpacity="0.1" strokeWidth="1.2" />
         <line x1="64" y1="0" x2="60" y2="62" stroke="#141210" strokeOpacity="0.1" strokeWidth="1.2" />
 
-        {route && <polyline points={route} fill="none" stroke="#EA580C" strokeWidth="1.1" strokeDasharray="2.5 1.5" strokeLinecap="round" />}
+        {roadLine ? (
+          <polyline points={roadLine} fill="none" stroke="#EA580C" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+        ) : (
+          route && <polyline points={route} fill="none" stroke="#EA580C" strokeWidth="1.1" strokeDasharray="2.5 1.5" strokeLinecap="round" />
+        )}
 
         {/* restaurant marker */}
         <g transform={`translate(${r.x},${(r.y / 100) * 62})`}>
@@ -89,7 +122,7 @@ export default function MockMap({ restaurant, customer, rider, showRoute = true 
         )}
       </svg>
       <figcaption className="flex items-center justify-between px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-coal/50">
-        <span>Mock GPS — not real tracking</span>
+        <span>{road ? `${road.distanceKm.toFixed(1)} km · ~${Math.max(1, Math.round(road.durationMin))} min by road` : 'Mock GPS — not real tracking'}</span>
         <span>Tema C7</span>
       </figcaption>
     </figure>
