@@ -59,6 +59,13 @@ export function Jobs() {
   }
 
   const available = orders.filter((o) => o.status === 'READY_FOR_PICKUP' && !o.riderId && !dismissed.has(o.id));
+  // Being prepared — visible the second the customer places the order,
+  // acceptable once the kitchen marks it ready.
+  const incoming = orders.filter(
+    (o) =>
+      o.orderType === 'DELIVERY' &&
+      (o.status === 'PENDING' || o.status === 'CONFIRMED' || o.status === 'PREPARING'),
+  );
   const mine = orders.filter(
     (o) =>
       o.riderId === me.id &&
@@ -192,6 +199,33 @@ export function Jobs() {
             </li>
           ))}
         </ul>
+      )}
+
+      {incoming.length > 0 && (
+        <div>
+          <h2 className="font-display text-lg font-extrabold">Incoming ({incoming.length})</h2>
+          <p className="mt-0.5 text-xs text-coal/55">Being prepared — you can accept as soon as the kitchen marks them ready.</p>
+          <ul className="mt-2 flex flex-col gap-3">
+            {incoming.map((o) => (
+              <li key={o.id}>
+                <Card className="border-0 opacity-90">
+                  <CardBody>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-display text-xl font-extrabold">#{o.id}</p>
+                      <Badge className="bg-gold/15 text-yellow-800">{o.status.replaceAll('_', ' ')}</Badge>
+                    </div>
+                    <p className="mt-1 text-sm text-coal/70">
+                      {o.customerName} · {o.items.reduce((s, i) => s + i.qty, 0)} items · {GHS(o.total)}
+                    </p>
+                    <p className="text-xs text-coal/55">
+                      {o.deliveryAddress ? `${o.deliveryAddress.street}, ${o.deliveryAddress.city}` : 'Customer address on file'}
+                    </p>
+                  </CardBody>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       <div>
