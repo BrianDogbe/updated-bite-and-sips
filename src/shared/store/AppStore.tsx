@@ -38,6 +38,8 @@ interface AppState {
   updateOrderStatus: (id: string, status: OrderStatus, by?: string) => void;
   markOrderPaid: (id: string) => void;
   assignRider: (orderId: string, riderId: string) => void;
+  declineOrder: (orderId: string) => void;
+  recordDeliveryStats: (riderId: string, fee: number) => void;
   deleteOrder: (id: string) => void;
   riders: Rider[];
   setRiderOnline: (id: string, online: boolean) => void;
@@ -462,6 +464,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setRiders((prev) => prev.map((r) => (r.id === riderId ? { ...r, busy: true } : r)));
   }, [orders]);
 
+  // Rider declines before pickup: release the order back to READY so the
+  // kitchen can hand it to someone else. Customer tracking shows it as ready again.
+  const declineOrder = useCallback((orderId: string) => {
+    if (backendEnabled()) {
+      api(`/api/orders/${orderId}/assign`, { method: 'PATCH', auth: true, body: { riderId: null } }).catch(() => {});
+    }
+    setOrders((prev) => prev.map((o) => {
+      if (o.id !== orderId) return o;
+      if (o.status !== 'RIDER_ASSIGNED' && o.status !== 'READY_FOR_PICKUP') return o;
+      const next: Order = { ...o, riderId: undefined };
+      if (o.status === 'RIDER_ASSIGNED') {
+        next.status = 'READY_FOR_PICKUP';
+        next.updatedAt = now();
+        next.timeline = [...o.timeline, { status: 'READY_FOR_PICKUP' as OrderStatus, at: now() }];
+      }
+      return next;
+    }));
+    publish({ type: 'ORDER_STATUS', orderId, status: 'READY_FOR_PICKUP', at: now() });
+    setRiders((prev) => prev.map((r) => ({ ...r, busy: false })));
+  }, []);
+
+  // Delivery completed: bump the rider's own stats so Earnings/History feel alive.
+  const recordDeliveryStats = useCallback((riderId: string, fee: number) => {
+    setRiders((prev) => prev.map((r) => (r.id === riderId
+      ? { ...r, deliveriesToday: r.deliveriesToday + 1, earningsToday: +(r.earningsToday + fee).toFixed(2), busy: false }
+      : r)));
+  }, []);
   // Remove a finished/cancelled ticket from every board (customer keeps history via tracking link until then).
   const deleteOrder = useCallback((id: string) => {
     if (backendEnabled()) {
@@ -507,7 +536,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value: AppState = {
     user, login, loginWithPassword, loginRider, logout, menu, setAvailability, upsertMenuItem, cart, addToCart, updateQty,
     removeLine, clearCart, cartCount, favorites, toggleFav, addresses, activeAddress,
-    setActiveAddress, addAddress, orders, placeOrder, refreshOrders, updateOrderStatus, markOrderPaid, assignRider, deleteOrder,
+    setActiveAddress, addAddress, orders, placeOrder, refreshOrders, updateOrderStatus, markOrderPaid, assignRider, deleteOrder, declineOrder, recordDeliveryStats,
     riders, setRiderOnline, promos, applyPromo, calcTotals, notifications, pushNotification,
     markAllRead, messages, addMessage, markMessageRead, deleteMessage, audit, logAudit, inventory, adjustStock, riderLocations,
   };

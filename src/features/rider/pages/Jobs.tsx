@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bike, MapPin, Navigation, Phone, Store } from 'lucide-react';
 import { useApp } from '../../../shared/store/AppStore';
@@ -21,9 +21,10 @@ function mapsLink(lat: number, lng: number): string {
 }
 
 export function Jobs() {
-  const { orders, assignRider, updateOrderStatus, refreshOrders, user } = useApp();
+  const { orders, assignRider, declineOrder, updateOrderStatus, refreshOrders, user } = useApp();
   const toast = useToast();
   const me = useMockRider();
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
   // Always re-pull on open — assignments made in the kitchen land here
   // even if a realtime event was missed.
@@ -35,7 +36,7 @@ export function Jobs() {
     return <Empty title="No riders available" body="Ask dispatch to register a rider account, then try again." />;
   }
 
-  const available = orders.filter((o) => o.status === 'READY_FOR_PICKUP' && !o.riderId);
+  const available = orders.filter((o) => o.status === 'READY_FOR_PICKUP' && !o.riderId && !dismissed.has(o.id));
   const mine = orders.filter(
     (o) =>
       o.riderId === me.id &&
@@ -52,6 +53,18 @@ export function Jobs() {
   const confirm = (orderId: string) => {
     updateOrderStatus(orderId, 'RIDER_ASSIGNED', user?.name ?? (me?.name ?? 'rider'));
     toast({ title: `Delivery ${orderId} confirmed`, body: 'The customer and kitchen have been notified.', kind: 'success' });
+  };
+
+  // Decline before pickup: assigned orders go back to READY for the kitchen;
+  // unassigned ones just hide from my list.
+  const decline = (orderId: string, assigned: boolean) => {
+    if (assigned) {
+      declineOrder(orderId);
+      toast({ title: `Delivery ${orderId} declined`, body: 'Released back to the kitchen.', kind: 'info' });
+    } else {
+      setDismissed((d) => new Set(d).add(orderId));
+      toast({ title: `Delivery ${orderId} declined`, body: 'It stays available for other riders.', kind: 'info' });
+    }
   };
 
   return (
@@ -111,15 +124,24 @@ export function Jobs() {
                     >
                       <Bike className="h-5 w-5" aria-hidden /> Accept delivery
                     </Button>
-                    <a
-                      href={mapsLink(RESTAURANT.lat, RESTAURANT.lng)}
-                      target="_blank"
-                      rel="noreferrer"
-                      aria-label={`Navigate to restaurant for order ${o.id}`}
-                      className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-coal/15 bg-white text-sm font-bold"
-                    >
-                      <Navigation className="h-4 w-4" aria-hidden /> Preview pickup route
-                    </a>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => decline(o.id, false)}
+                        aria-label={`Decline delivery ${o.id}`}
+                        className="inline-flex min-h-[48px] items-center justify-center rounded-xl border border-coal/15 bg-white text-sm font-bold text-coal/70"
+                      >
+                        Decline
+                      </button>
+                      <a
+                        href={mapsLink(RESTAURANT.lat, RESTAURANT.lng)}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={`Navigate to restaurant for order ${o.id}`}
+                        className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-coal/15 bg-white text-sm font-bold"
+                      >
+                        <Navigation className="h-4 w-4" aria-hidden /> Preview pickup route
+                      </a>
+                    </div>
                   </div>
                 </CardBody>
               </Card>
@@ -149,15 +171,24 @@ export function Jobs() {
                     </p>
                     <div className="mt-3 grid grid-cols-2 gap-2">
                       {o.status === 'READY_FOR_PICKUP' ? (
-                        <Button
-                          size="lg"
-                          onClick={() => confirm(o.id)}
-                          disabled={!me.online}
-                          aria-label={`Accept and confirm delivery ${o.id}`}
-                          className="col-span-2 min-h-[56px] w-full text-base"
-                        >
-                          <Bike className="h-5 w-5" aria-hidden /> Accept & confirm
-                        </Button>
+                        <>
+                          <Button
+                            size="lg"
+                            onClick={() => confirm(o.id)}
+                            disabled={!me.online}
+                            aria-label={`Accept and confirm delivery ${o.id}`}
+                            className="col-span-2 min-h-[56px] w-full text-base"
+                          >
+                            <Bike className="h-5 w-5" aria-hidden /> Accept & confirm
+                          </Button>
+                          <button
+                            onClick={() => decline(o.id, true)}
+                            aria-label={`Decline delivery ${o.id}`}
+                            className="col-span-2 inline-flex min-h-[48px] items-center justify-center rounded-xl border border-coal/15 bg-white text-sm font-bold text-coal/70"
+                          >
+                            Decline
+                          </button>
+                        </>
                       ) : (
                         <Link
                           to={`/rider/active/${o.id}`}

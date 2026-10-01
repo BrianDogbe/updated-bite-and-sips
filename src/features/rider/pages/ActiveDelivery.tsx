@@ -23,7 +23,7 @@ function maskPhone(phone: string): string {
 export function ActiveDelivery() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { orders, updateOrderStatus, user } = useApp();
+  const { orders, updateOrderStatus, declineOrder, recordDeliveryStats, user } = useApp();
   const toast = useToast();
   const me = useMockRider();
 
@@ -99,8 +99,14 @@ export function ActiveDelivery() {
     }
     setOtpError(null);
     updateOrderStatus(order.id, 'DELIVERED', by);
+    if (me) recordDeliveryStats(me.id, order.deliveryFee);
     toast({ title: `${order.id} delivered`, body: 'Nice work! Earnings updated.', kind: 'success' });
     navigate('/rider/history');
+  };
+  const decline = () => {
+    declineOrder(order.id);
+    toast({ title: `${order.id} declined`, body: 'Released back to the kitchen.', kind: 'info' });
+    navigate('/rider');
   };
 
   return (
@@ -213,9 +219,18 @@ export function ActiveDelivery() {
 
       {/* Pickup / trip actions */}
       {order.status === 'READY_FOR_PICKUP' && order.riderId === me?.id && (
-        <Button size="lg" onClick={confirmHandover} aria-label={`Accept and confirm delivery ${order.id}`} className="min-h-[60px] w-full text-lg">
-          <CheckCheck className="h-5 w-5" aria-hidden /> Accept & confirm
-        </Button>
+        <>
+          <Button size="lg" onClick={confirmHandover} aria-label={`Accept and confirm delivery ${order.id}`} className="min-h-[60px] w-full text-lg">
+            <CheckCheck className="h-5 w-5" aria-hidden /> Accept & confirm
+          </Button>
+          <button
+            onClick={decline}
+            aria-label={`Decline delivery ${order.id}`}
+            className="inline-flex min-h-[52px] w-full items-center justify-center rounded-xl border border-coal/15 bg-white text-sm font-bold text-coal/70"
+          >
+            Decline order
+          </button>
+        </>
       )}
       {(order.status === 'READY_FOR_PICKUP' && order.riderId !== me?.id) && (
         <Button size="lg" onClick={pickedUp} aria-label={`Confirm pickup for order ${order.id}`} className="min-h-[60px] w-full text-lg">
