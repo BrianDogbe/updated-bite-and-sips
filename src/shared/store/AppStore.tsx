@@ -189,8 +189,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       return;
     }
-      return;
-    }
     api<Order[]>('/api/orders', { auth: true }).then(setOrders).catch(() =>
       setOrders((prev) => (prev.length > 0 ? prev : seedOrders)),
     );
