@@ -185,12 +185,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
   useEffect(() => {
     if (!backendEnabled() || !user || user.role === 'CUSTOMER') return;
-    // Without a token we can never load live lists — always use working seeds.
+    // Without a token we can never load live lists — top up empties with
+    // working seeds, but NEVER wipe orders already in memory (a customer
+    // order or kitchen handoff would vanish on every staff sign-in).
     if (!getToken()) {
-      setOrders(seedOrders);
-      setRiders(INITIAL_RIDERS);
-      setMessages(seedMockMessages());
-      setInventory(INVENTORY_SEED);
+      setOrders((prev) => (prev.length > 0 ? prev : seedOrders));
+      setRiders((prev) => (prev.length > 0 ? prev : INITIAL_RIDERS));
+      setMessages((prev) => (prev.length > 0 ? prev : seedMockMessages()));
+      setInventory((prev) => (prev.length > 0 ? prev : INVENTORY_SEED));
       return;
     }
     api<Order[]>('/api/orders', { auth: true }).then(setOrders).catch(() =>
