@@ -1,8 +1,10 @@
-import { useEffect } from 'react';
+import { useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
-import { Bike, Briefcase, History, User, Wallet } from 'lucide-react';
+import { Bike, Briefcase, Eye, EyeOff, History, User, Wallet } from 'lucide-react';
 import { useApp } from '../../shared/store/AppStore';
 import { cn } from '../../lib/utils';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/primitives';
 import ScrollToTop from '../../components/common/ScrollToTop';
 
 const TABS = [
@@ -18,12 +20,69 @@ export function useMockRider() {
 }
 
 export default function RiderLayout() {
-  const { user, login, orders, riders, setRiderOnline } = useApp();
+  const { user, loginRider, orders, riders, setRiderOnline } = useApp();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
-  // Mock rider login (demo mode)
-  useEffect(() => {
-    if (!user || user.role !== 'RIDER') login('Kwame Mensah', 'RIDER');
-  }, [user, login]);
+  const signIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !password) {
+      setFormError('Enter your email and password.');
+      return;
+    }
+    const res = await loginRider(email, password);
+    if (!res.ok) setFormError(res.error ?? 'Login failed.');
+    else setFormError(null);
+  };
+
+  // Every rider signs in as themselves — jobs, earnings and history follow the account.
+  if (!user || user.role !== 'RIDER') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-cream p-6">
+        <div className="w-full max-w-md rounded-2xl border border-coal/10 bg-white p-8 text-center shadow-card">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-brand-600 text-white">
+            <Bike className="h-6 w-6" />
+          </div>
+          <h1 className="mt-4 font-display text-2xl font-extrabold">Rider sign-in</h1>
+          <p className="mt-1 text-sm text-coal/60">Sign in to see your deliveries, trips and earnings.</p>
+          <form onSubmit={signIn} className="mt-6 space-y-3 text-left" noValidate>
+            <div>
+              <label htmlFor="rider-email" className="text-xs font-bold uppercase tracking-wide">Email</label>
+              <Input
+                id="rider-email" type="email" autoComplete="username"
+                value={email} onChange={(e) => setEmail(e.target.value)}
+                placeholder="kwame@biteandsips.com" className="mt-1"
+              />
+            </div>
+            <div>
+              <label htmlFor="rider-password" className="text-xs font-bold uppercase tracking-wide">Password</label>
+              <div className="relative mt-1">
+                <Input
+                  id="rider-password" type={showPw ? 'text' : 'password'} autoComplete="current-password"
+                  value={password} onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••" className="pr-11"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPw((s) => !s)}
+                  aria-label={showPw ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPw}
+                  className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-coal/50 hover:bg-coal/5"
+                >
+                  {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
+              </div>
+            </div>
+            {formError && <p role="alert" className="text-sm font-semibold text-red-600">{formError}</p>}
+            <Button type="submit" size="lg" className="w-full">Sign in</Button>
+          </form>
+          <p className="mt-3 text-[11px] text-coal/45">Demo: kwame@biteandsips.com · rider1234 (Ama: ama.rider@biteandsips.com)</p>
+        </div>
+      </div>
+    );
+  }
 
   const me = riders.find((r) => r.name === user?.name) ?? riders[0] ?? null;
 

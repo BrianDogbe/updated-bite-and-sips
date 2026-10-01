@@ -111,9 +111,15 @@ export const PROMOTIONS: Promotion[] = [
 ];
 
 export const INITIAL_RIDERS: Rider[] = [
-  { id: 'r1', name: 'Kwame Mensah', phone: '+233 24 111 2222', role: 'RIDER', active: true, vehicle: 'Motorbike', plate: 'GR-4521-23', online: true, busy: false, lat: 5.56, lng: -0.2, earningsToday: 180, deliveriesToday: 6, rating: 4.9 },
-  { id: 'r2', name: 'Ama Boateng', phone: '+233 24 333 4444', role: 'RIDER', active: true, vehicle: 'Motorbike', plate: 'GR-7810-24', online: true, busy: true, lat: 5.57, lng: -0.19, earningsToday: 210, deliveriesToday: 8, rating: 4.8 },
-  { id: 'r3', name: 'Yusuf Ali', phone: '+233 24 555 6666', role: 'RIDER', active: true, vehicle: 'Bicycle', online: false, busy: false, lat: 5.55, lng: -0.21, earningsToday: 60, deliveriesToday: 2, rating: 4.7 },
+  { id: 'r1', name: 'Kwame Mensah', email: 'kwame@biteandsips.com', phone: '+233 24 111 2222', role: 'RIDER', active: true,
+vehicle: 'Motorbike', plate: 'GR-4521-23', online: true, busy: false, lat: 5.56, lng: -0.2, earningsToday: 180,
+deliveriesToday: 6, rating: 4.9 },
+  { id: 'r2', name: 'Ama Boateng', email: 'ama.rider@biteandsips.com', phone: '+233 24 333 4444', role: 'RIDER', active: true,
+vehicle: 'Motorbike', plate: 'GR-7810-24', online: true, busy: true, lat: 5.57, lng: -0.19, earningsToday: 210,
+deliveriesToday: 8, rating: 4.8 },
+  { id: 'r3', name: 'Yusuf Ali', email: 'yusuf@biteandsips.com', phone: '+233 24 555 6666', role: 'RIDER', active: true,
+vehicle: 'Bicycle', online: false, busy: false, lat: 5.55, lng: -0.21, earningsToday: 60,
+deliveriesToday: 2, rating: 4.7 },
 ];
 
 export const INVENTORY_SEED: InventoryItem[] = [

@@ -15,6 +15,7 @@ interface AppState {
   user: User | null;
   login: (name: string, role?: User['role']) => void;
   loginWithPassword: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  loginRider: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
   menu: MenuItem[];
   setAvailability: (id: string, available: boolean) => void;
@@ -269,6 +270,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return mockCheck();
   }, []);
 
+  const loginRider = useCallback(async (email: string, password: string): Promise<{ ok: boolean; error?: string }> => {
+    const clean = email.trim().toLowerCase();
+    if (backendEnabled()) {
+      try {
+        const res = await api<{ token: string; user: { id: string; name: string; email: string; role: User['role']; phone?: string } }>(
+          '/api/auth/login', { method: 'POST', body: { email: clean, password } },
+        );
+        if (res.user.role !== 'RIDER') {
+          setToken(null);
+          return { ok: false, error: 'This sign-in is for riders only.' };
+        }
+        setToken(res.token);
+        setUser({ id: res.user.id, name: res.user.name, email: res.user.email, phone: res.user.phone ?? '', role: 'RIDER', active: true });
+        return { ok: true };
+      } catch (e) {
+        if (!isBackendReachable()) {
+          const r = riders.find((x) => x.email?.toLowerCase() === clean);
+          if (!r) return { ok: false, error: 'Unknown rider email.' };
+          if (password !== 'rider1234') return { ok: false, error: 'Incorrect password.' };
+          setUser({ id: r.id, name: r.name, email: r.email, phone: r.phone, role: 'RIDER', active: true });
+          return { ok: true };
+        }
+        return { ok: false, error: e instanceof Error ? e.message : 'Login failed' };
+      }
+    }
+    const r = riders.find((x) => x.email?.toLowerCase() === clean);
+    if (!r) return { ok: false, error: 'Unknown rider email.' };
+    if (password !== 'rider1234') return { ok: false, error: 'Incorrect password.' };
+    setUser({ id: r.id, name: r.name, email: r.email, phone: r.phone, role: 'RIDER', active: true });
+    return { ok: true };
+  }, [riders]);
+
   const setAvailability = useCallback((id: string, available: boolean) => {
     setMenu((m) => m.map((x) => (x.id === id ? { ...x, available } : x)));
   }, []);
@@ -469,7 +502,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value: AppState = {
-    user, login, loginWithPassword, logout, menu, setAvailability, upsertMenuItem, cart, addToCart, updateQty,
+    user, login, loginWithPassword, loginRider, logout, menu, setAvailability, upsertMenuItem, cart, addToCart, updateQty,
     removeLine, clearCart, cartCount, favorites, toggleFav, addresses, activeAddress,
     setActiveAddress, addAddress, orders, placeOrder, refreshOrders, updateOrderStatus, markOrderPaid, assignRider, deleteOrder,
     riders, setRiderOnline, promos, applyPromo, calcTotals, notifications, pushNotification,
