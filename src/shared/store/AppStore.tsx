@@ -392,10 +392,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (backendEnabled()) {
       api(`/api/orders/${orderId}/assign`, { method: 'PATCH', auth: true, body: { riderId } }).catch(() => {});
     }
-    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, riderId } : o)));
+    // Advance READY → RIDER_ASSIGNED locally too, so the rider board, the resume
+    // banner and customer tracking move even if the socket event is missed.
+    // (The realtime dedupe guard makes a duplicate server event harmless.)
+    const advance = orders.some((o) => o.id === orderId && o.status === 'READY_FOR_PICKUP');
+    setOrders((prev) => prev.map((o) => {
+      if (o.id !== orderId) return o;
+      const next: Order = { ...o, riderId };
+      if (o.status === 'READY_FOR_PICKUP') {
+        next.status = 'RIDER_ASSIGNED';
+        next.updatedAt = now();
+        next.timeline = [...o.timeline, { status: 'RIDER_ASSIGNED' as OrderStatus, at: now() }];
+      }
+      return next;
+    }));
     publish({ type: 'RIDER_ASSIGNED', orderId, riderId });
+    if (advance) publish({ type: 'ORDER_STATUS', orderId, status: 'RIDER_ASSIGNED', at: now() });
     setRiders((prev) => prev.map((r) => (r.id === riderId ? { ...r, busy: true } : r)));
-  }, []);
+  }, [orders]);
 
   // Remove a finished/cancelled ticket from every board (customer keeps history via tracking link until then).
   const deleteOrder = useCallback((id: string) => {

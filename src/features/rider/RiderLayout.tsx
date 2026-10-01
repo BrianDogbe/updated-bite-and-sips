@@ -31,7 +31,7 @@ export default function RiderLayout() {
     ? orders.find(
         (o) =>
           o.riderId === me.id &&
-          (o.status === 'RIDER_ASSIGNED' || o.status === 'PICKED_UP' || o.status === 'OUT_FOR_DELIVERY'),
+          (o.status === 'READY_FOR_PICKUP' || o.status === 'RIDER_ASSIGNED' || o.status === 'ARRIVED_AT_RESTAURANT' || o.status === 'PICKED_UP' || o.status === 'OUT_FOR_DELIVERY'),
       )
     : undefined;
 
