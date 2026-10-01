@@ -180,6 +180,7 @@ r.patch('/:id/assign', requireAuth([...STAFF, 'DELIVERY_MANAGER']), (req: Authed
   const at = new Date().toISOString();
   const row = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as Record<string, unknown>;
   // Rider declined / released: back to READY so the kitchen can hand it over again.
+  // (Assigning never advances status — only the rider's own Accept confirms it.)
   if (!riderId && (row.status as string) === 'RIDER_ASSIGNED') {
     const timeline = [...JSON.parse((row.timeline as string) || '[]'), { status: 'READY_FOR_PICKUP', at }];
     db.prepare("UPDATE orders SET status = 'READY_FOR_PICKUP', timeline = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(timeline), at, req.params.id);
@@ -188,11 +189,6 @@ r.patch('/:id/assign', requireAuth([...STAFF, 'DELIVERY_MANAGER']), (req: Authed
   if (riderId) {
     db.prepare('UPDATE users SET busy = 1 WHERE id = ?').run(riderId);
     emit('RIDER_ASSIGNED', { orderId: req.params.id, riderId });
-    if ((row.status as string) === 'READY_FOR_PICKUP') {
-      const timeline = [...JSON.parse((row.timeline as string) || '[]'), { status: 'RIDER_ASSIGNED', at }];
-      db.prepare("UPDATE orders SET status = 'RIDER_ASSIGNED', timeline = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(timeline), at, req.params.id);
-      emit('ORDER_STATUS', { orderId: req.params.id, status: 'RIDER_ASSIGNED' });
-    }
   }
   res.json({ id: req.params.id, riderId: riderId ?? null });
 });

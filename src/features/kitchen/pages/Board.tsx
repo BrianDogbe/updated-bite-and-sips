@@ -301,13 +301,13 @@ export function Board() {
                       {o.orderType === 'DELIVERY' && (o.status === 'READY_FOR_PICKUP' || o.status === 'RIDER_ASSIGNED' || o.status === 'ARRIVED_AT_RESTAURANT') && (
                         <p
                           role="status"
-                          className={o.riderId
-                            ? 'mt-1.5 rounded-lg bg-leaf/10 px-2.5 py-1.5 text-xs font-extrabold text-leaf'
-                            : 'mt-1.5 animate-pulse rounded-lg bg-gold/15 px-2.5 py-1.5 text-xs font-extrabold text-yellow-800'}
+                          className={o.status === 'READY_FOR_PICKUP' && !o.riderId
+                            ? 'mt-1.5 animate-pulse rounded-lg bg-gold/15 px-2.5 py-1.5 text-xs font-extrabold text-yellow-800'
+                            : 'mt-1.5 rounded-lg bg-leaf/10 px-2.5 py-1.5 text-xs font-extrabold text-leaf'}
                         >
-                          {o.riderId
-                            ? `✓ ${riders.find((r) => r.id === o.riderId)?.name ?? 'Rider'} confirmed — awaiting pickup`
-                            : '⏳ Waiting for a rider to accept…'}
+                          {o.status === 'READY_FOR_PICKUP' && !o.riderId && '⏳ Waiting for a rider to accept…'}
+                          {o.status === 'READY_FOR_PICKUP' && o.riderId && `⏳ Waiting for ${riders.find((r) => r.id === o.riderId)?.name ?? 'rider'} to accept…`}
+                          {o.status !== 'READY_FOR_PICKUP' && `✓ ${riders.find((r) => r.id === o.riderId)?.name ?? 'Rider'} confirmed — awaiting pickup`}
                         </p>
                       )}
 
