@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Bike, Flame, ShoppingBag, Timer } from 'lucide-react';
+import { Bike, Flame, ShoppingBag, Timer, X } from 'lucide-react';
 import { useApp } from '../../../shared/store/AppStore';
 import { useToast } from '../../../components/ui/toaster';
 import { Button } from '../../../components/ui/button';
@@ -104,10 +104,11 @@ function colOf(o: Order): ColKey | null {
 // ── board ────────────────────────────────────────────────
 
 export function Board() {
-  const { orders, updateOrderStatus, user } = useApp();
+  const { orders, updateOrderStatus, assignRider, deleteOrder, riders, user } = useApp();
   const toast = useToast();
   const ctx = useOutletContext<KitchenOutletCtx | null>();
   const soundOn = ctx?.soundOn ?? true;
+  const [riderPick, setRiderPick] = useState<Record<string, string>>({});
 
   // Auto-refresh tick so elapsed times / countdowns stay fresh from the store
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -158,6 +159,23 @@ export function Board() {
     updateOrderStatus(id, status, user?.name ?? 'kitchen');
     toast({ title: `${id} → ${label}`, kind: 'success' });
   };
+
+  const cancelOrder = (id: string) => {
+    if (!window.confirm(`Cancel order ${id}? The customer will see the cancellation immediately.`)) return;
+    act(id, 'CANCELLED', 'Cancelled');
+  };
+
+  const handToRider = (orderId: string) => {
+    const riderId = riderPick[orderId];
+    if (!riderId) {
+      toast({ title: 'Pick a rider first', kind: 'error' });
+      return;
+    }
+    assignRider(orderId, riderId);
+    toast({ title: `${orderId} → rider`, body: riders.find((r) => r.id === riderId)?.name, kind: 'success' });
+  };
+
+  const onlineRiders = riders.filter((r) => r.online);
 
   const totalActive = grouped.NEW.length + grouped.PREPARING.length + grouped.READY.length;
   const urgentCount = [...grouped.NEW, ...grouped.PREPARING, ...grouped.READY].filter((o) => isUrgent(o, nowMs)).length;
@@ -297,7 +315,7 @@ export function Board() {
                         ))}
                       </ul>
 
-                      <div className="mt-4">
+                      <div className="mt-4 space-y-2">
                         {(o.status === 'PENDING' || o.status === 'CONFIRMED') && (
                           <Button
                             size="lg"
@@ -319,7 +337,33 @@ export function Board() {
                             Mark ready
                           </Button>
                         )}
-                        {(o.status === 'READY_FOR_PICKUP' || o.status === 'RIDER_ASSIGNED') && (
+                        {o.status === 'READY_FOR_PICKUP' && o.orderType === 'DELIVERY' && (
+                          <div className="space-y-2 rounded-xl bg-cream p-3">
+                            <label htmlFor={`rider-${o.id}`} className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wide text-coal/60">
+                              <Bike size={14} /> Hand to rider
+                            </label>
+                            <select
+                              id={`rider-${o.id}`}
+                              value={riderPick[o.id] ?? ''}
+                              onChange={(e) => setRiderPick((p) => ({ ...p, [o.id]: e.target.value }))}
+                              className="h-12 w-full rounded-xl border border-coal/15 bg-white px-3 text-sm font-semibold"
+                            >
+                              <option value="">Select rider…</option>
+                              {onlineRiders.map((r) => (
+                                <option key={r.id} value={r.id}>{r.name}{r.busy ? ' (busy)' : ''}</option>
+                              ))}
+                            </select>
+                            <Button
+                              size="lg"
+                              onClick={() => handToRider(o.id)}
+                              aria-label={`Hand order ${o.id} to rider`}
+                              className="min-h-[56px] w-full text-base"
+                            >
+                              Hand to rider
+                            </Button>
+                          </div>
+                        )}
+                        {((o.status === 'READY_FOR_PICKUP' && o.orderType === 'PICKUP') || o.status === 'RIDER_ASSIGNED') && (
                           <Button
                             size="lg"
                             variant="secondary"
@@ -334,6 +378,26 @@ export function Board() {
                           <p className="rounded-xl bg-coal/5 px-4 py-3 text-center text-sm font-bold text-coal/60">
                             {o.status.replaceAll('_', ' ')}
                           </p>
+                        )}
+                        {['PENDING', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP'].includes(o.status) && (
+                          <button
+                            type="button"
+                            onClick={() => cancelOrder(o.id)}
+                            aria-label={`Cancel order ${o.id}`}
+                            className="w-full rounded-xl border border-red-200 px-4 py-2.5 text-sm font-bold text-red-700 hover:bg-red-50"
+                          >
+                            Cancel order
+                          </button>
+                        )}
+                        {(o.status === 'DELIVERED' || o.status === 'CANCELLED') && (
+                          <button
+                            type="button"
+                            onClick={() => deleteOrder(o.id)}
+                            aria-label={`Remove order ${o.id} from board`}
+                            className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold text-coal/45 hover:bg-coal/5 hover:text-coal"
+                          >
+                            <X size={14} /> Remove from board
+                          </button>
                         )}
                       </div>
                     </motion.article>

@@ -36,6 +36,7 @@ interface AppState {
   updateOrderStatus: (id: string, status: OrderStatus, by?: string) => void;
   markOrderPaid: (id: string) => void;
   assignRider: (orderId: string, riderId: string) => void;
+  deleteOrder: (id: string) => void;
   riders: Rider[];
   setRiderOnline: (id: string, online: boolean) => void;
   promos: Promotion[];
@@ -137,6 +138,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }));
     } else if (e.type === 'ORDER_CREATED') {
       setOrders((prev) => (prev.some((o) => o.id === e.order.id) ? prev : [e.order, ...prev]));
+    } else if (e.type === 'ORDER_DELETED') {
+      setOrders((prev) => prev.filter((o) => o.id !== e.orderId));
     } else if (e.type === 'RIDER_LOCATION') {
       setRiderLocations((prev) => ({ ...prev, [e.riderId]: { lat: e.lat, lng: e.lng } }));
     } else if (e.type === 'NOTIFY') {
@@ -370,6 +373,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setRiders((prev) => prev.map((r) => (r.id === riderId ? { ...r, busy: true } : r)));
   }, []);
 
+  // Remove a finished/cancelled ticket from every board (customer keeps history via tracking link until then).
+  const deleteOrder = useCallback((id: string) => {
+    if (backendEnabled()) {
+      api(`/api/orders/${id}`, { method: 'DELETE', auth: true }).catch(() => {});
+    }
+    publish({ type: 'ORDER_DELETED', orderId: id });
+  }, []);
+
   const setRiderOnline = useCallback((id: string, online: boolean) => {
     setRiders((r) => r.map((x) => (x.id === id ? { ...x, online } : x)));
   }, []);
@@ -407,7 +418,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value: AppState = {
     user, login, loginWithPassword, logout, menu, setAvailability, upsertMenuItem, cart, addToCart, updateQty,
     removeLine, clearCart, cartCount, favorites, toggleFav, addresses, activeAddress,
-    setActiveAddress, addAddress, orders, placeOrder, updateOrderStatus, markOrderPaid, assignRider,
+    setActiveAddress, addAddress, orders, placeOrder, updateOrderStatus, markOrderPaid, assignRider, deleteOrder,
     riders, setRiderOnline, promos, applyPromo, calcTotals, notifications, pushNotification,
     markAllRead, messages, addMessage, markMessageRead, deleteMessage, audit, logAudit, inventory, adjustStock, riderLocations,
   };

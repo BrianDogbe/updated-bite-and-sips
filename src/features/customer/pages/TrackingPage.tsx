@@ -1,14 +1,17 @@
-import { useMemo } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Bike, Check, KeyRound, Phone, Star } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, ArrowRight, Bike, Check, KeyRound, Phone, ReceiptText, Star } from 'lucide-react';
 import { useApp } from '../../../shared/store/AppStore';
 import { RESTAURANT } from '../../../shared/data';
 import { GHS, cn, eta, format12h, formatTime12h } from '../../../lib/utils';
 import { haversineKm } from '../../../shared/services/delivery';
-import { Card, CardBody, Empty, SectionTitle } from '../../../components/ui/primitives';
+import { api, backendEnabled } from '../../../shared/services/backend';
+import { publish } from '../../../shared/services/realtime';
+import { Card, CardBody, Empty, Input, SectionTitle } from '../../../components/ui/primitives';
+import { Button } from '../../../components/ui/button';
 import Breadcrumbs from '../../../components/common/Breadcrumbs';
 import MockMap from '../../../components/common/MockMap';
-import type { OrderStatus } from '../../../shared/types';
+import type { Order, OrderStatus } from '../../../shared/types';
 
 const DELIVERY_FLOW: OrderStatus[] = ['PENDING', 'CONFIRMED', 'PREPARING', 'RIDER_ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'];
 const PICKUP_FLOW: OrderStatus[] = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'DELIVERED'];
@@ -25,10 +28,63 @@ const LABELS: Record<OrderStatus, string> = {
   CANCELLED: 'Cancelled',
 };
 
+/** Find-your-order page — always reachable from the navbar, even days later. */
+export function TrackLookup() {
+  const navigate = useNavigate();
+  const [code, setCode] = useState('');
+  const [lastOrder] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('bs_last_order');
+    } catch {
+      return null;
+    }
+  });
+  const go = (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = code.trim().toUpperCase();
+    if (id) navigate(`/track/${id}`);
+  };
+  return (
+    <main className="container py-24">
+      <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Track order' }]} />
+      <div className="mx-auto max-w-xl text-center">
+        <SectionTitle kicker="Tracking" title="Where's my food?" sub="Enter the order number from your confirmation." />
+        <Card className="mt-6 border-0"><CardBody className="p-6">
+          <form onSubmit={go} className="flex gap-2">
+            <label htmlFor="track-code" className="sr-only">Order number</label>
+            <Input
+              id="track-code" value={code} onChange={(e) => setCode(e.target.value)}
+              placeholder="e.g. BS1024" className="uppercase" autoComplete="off"
+            />
+            <Button type="submit">Track <ArrowRight /></Button>
+          </form>
+          {lastOrder && (
+            <button
+              onClick={() => navigate(`/track/${lastOrder}`)}
+              className="mt-4 inline-flex items-center gap-1.5 text-sm font-bold text-brand-700 hover:underline"
+            >
+              <ReceiptText size={15} /> Resume your last order ({lastOrder})
+            </button>
+          )}
+        </CardBody></Card>
+      </div>
+    </main>
+  );
+}
+
 export default function TrackingPage() {
   const { id } = useParams<{ id: string }>();
   const { orders, riders, riderLocations } = useApp();
   const order = useMemo(() => orders.find((o) => o.id === id), [orders, id]);
+
+  // Order placed on another device? Pull it from the server once, then
+  // live socket updates keep it fresh like any local order.
+  useEffect(() => {
+    if (order || !id || !backendEnabled()) return;
+    api<Order>(`/api/orders/${encodeURIComponent(id)}`)
+      .then((o) => publish({ type: 'ORDER_CREATED', order: o }))
+      .catch(() => {});
+  }, [order, id]);
 
   if (!order) {
     return (

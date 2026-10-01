@@ -6,7 +6,7 @@ import HomePage from './features/customer/pages/HomePage';
 import MenuPage from './features/customer/pages/MenuPage';
 import ItemPage from './features/customer/pages/ItemPage';
 import CheckoutPage from './features/customer/pages/CheckoutPage';
-import TrackingPage from './features/customer/pages/TrackingPage';
+import TrackingPage, { TrackLookup } from './features/customer/pages/TrackingPage';
 import { AboutPage, ContactPage, HelpPage } from './features/customer/pages/StaticPages';
 import AdminLayout from './features/admin/AdminLayout';
 import Dashboard from './features/admin/pages/Dashboard';
@@ -57,6 +57,7 @@ const router = createBrowserRouter([
       { path: 'menu', element: <MenuPage /> },
       { path: 'menu/:id', element: <ItemPage /> },
       { path: 'checkout', element: <CheckoutPage /> },
+      { path: 'track', element: <TrackLookup /> },
       { path: 'track/:id', element: <TrackingPage /> },
       { path: 'about', element: <AboutPage /> },
       { path: 'contact', element: <ContactPage /> },

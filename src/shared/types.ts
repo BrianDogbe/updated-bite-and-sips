@@ -188,6 +188,7 @@ export interface ContactMessage {
 export type RealtimeEvent =
   | { type: 'ORDER_CREATED'; order: Order }
   | { type: 'ORDER_STATUS'; orderId: string; status: OrderStatus; at: string }
+  | { type: 'ORDER_DELETED'; orderId: string }
   | { type: 'RIDER_LOCATION'; riderId: string; orderId: string; lat: number; lng: number; at: string }
   | { type: 'RIDER_ASSIGNED'; orderId: string; riderId: string }
   | { type: 'NOTIFY'; notification: NotificationMsg };

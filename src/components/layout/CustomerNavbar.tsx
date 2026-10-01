@@ -9,6 +9,7 @@ import CartDrawer from '../common/CartDrawer';
 const LINKS = [
   { to: '/', label: 'Home' },
   { to: '/menu', label: 'Menu' },
+  { to: '/track', label: 'Track Order' },
   { to: '/about', label: 'About' },
   { to: '/contact', label: 'Contact' },
 ];

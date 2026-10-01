@@ -178,4 +178,23 @@ r.patch('/:id/assign', requireAuth([...STAFF, 'DELIVERY_MANAGER']), (req: Authed
   res.json({ id: req.params.id, riderId: riderId ?? null });
 });
 
+// DELETE /api/orders/:id — kitchen clearing finished/cancelled tickets.
+// Only terminal orders may be deleted; live orders must be cancelled first.
+r.delete('/:id', requireAuth(STAFF), (req: AuthedRequest, res) => {
+  const row = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as
+    { status: string } | undefined;
+  if (!row) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  if (!['CANCELLED', 'DELIVERED'].includes(row.status)) {
+    res.status(400).json({ error: 'Only cancelled or delivered orders can be removed' });
+    return;
+  }
+  db.prepare('DELETE FROM orders WHERE id = ?').run(req.params.id);
+  logAudit(req.user?.name ?? 'staff', `Removed order ${req.params.id} from board`, 'orders', row.status, 'DELETED');
+  emit('ORDER_DELETED', { orderId: req.params.id });
+  res.json({ ok: true });
+});
+
 export default r;

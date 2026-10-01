@@ -5,10 +5,8 @@ import type { Order, OrderStatus } from '../../../shared/types';
 import { GHS, cn, format12h } from '../../../lib/utils';
 import { Button } from '../../../components/ui/button';
 import { Card, CardBody, Badge, Input, Empty, SectionTitle } from '../../../components/ui/primitives';
-import { useToast } from '../../../components/ui/toaster';
 
 const STATUSES: (OrderStatus | 'ALL')[] = ['ALL', 'PENDING', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'RIDER_ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
-const NEXT: OrderStatus[] = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'RIDER_ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
 
 function statusStyle(s: OrderStatus): string {
   if (s === 'DELIVERED') return 'bg-leaf/10 text-leaf';
@@ -18,8 +16,7 @@ function statusStyle(s: OrderStatus): string {
 }
 
 export default function OrdersPage() {
-  const { orders, riders, updateOrderStatus, assignRider, user } = useApp();
-  const toast = useToast();
+  const { orders, riders } = useApp();
   const [q, setQ] = useState('');
   const [status, setStatus] = useState<OrderStatus | 'ALL'>('ALL');
   const [otype, setOtype] = useState<'ALL' | 'PICKUP' | 'DELIVERY'>('ALL');
@@ -126,38 +123,16 @@ export default function OrdersPage() {
                 <p className="mt-1">{live.paymentMethod} · {live.paymentStatus} · fee {GHS(live.deliveryFee)} · discount {GHS(live.discount)}</p>
               </section>
               <section>
-                <h4 className="text-xs font-bold uppercase tracking-wide text-coal/50">Change status</h4>
-                <div className="mt-2 flex gap-2">
-                  <select
-                    id="order-status"
-                    defaultValue={live.status}
-                    className="h-11 flex-1 rounded-xl border border-coal/15 bg-white px-3"
-                    onChange={(e) => {
-                      updateOrderStatus(live.id, e.target.value as OrderStatus, user?.name ?? 'admin');
-                      toast({ title: 'Status updated', body: `${live.id} → ${e.target.value}`, kind: 'success' });
-                    }}
-                  >
-                    {NEXT.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
+                <h4 className="text-xs font-bold uppercase tracking-wide text-coal/50">Status <span className="font-normal normal-case">(updated by kitchen)</span></h4>
+                <p className="mt-2"><Badge className={statusStyle(live.status)}>{live.status.replaceAll('_', ' ')}</Badge></p>
               </section>
               <section>
-                <h4 className="text-xs font-bold uppercase tracking-wide text-coal/50">Assign rider</h4>
-                <select
-                  aria-label="Assign rider"
-                  value={live.riderId ?? ''}
-                  className="mt-2 h-11 w-full rounded-xl border border-coal/15 bg-white px-3"
-                  onChange={(e) => {
-                    if (!e.target.value) return;
-                    assignRider(live.id, e.target.value);
-                    toast({ title: 'Rider assigned', body: e.target.value, kind: 'success' });
-                  }}
-                >
-                  <option value="">Unassigned</option>
-                  {riders.filter((r) => r.online).map((r) => (
-                    <option key={r.id} value={r.id}>{r.name}{r.busy ? ' (busy)' : ''}</option>
-                  ))}
-                </select>
+                <h4 className="text-xs font-bold uppercase tracking-wide text-coal/50">Rider <span className="font-normal normal-case">(assigned by kitchen)</span></h4>
+                <p className="mt-1 font-semibold">
+                  {live.riderId
+                    ? (riders.find((r) => r.id === live.riderId)?.name ?? live.riderId)
+                    : 'Not assigned yet'}
+                </p>
               </section>
               <section>
                 <h4 className="text-xs font-bold uppercase tracking-wide text-coal/50">Timeline</h4>

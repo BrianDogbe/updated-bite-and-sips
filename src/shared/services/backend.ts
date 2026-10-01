@@ -66,12 +66,14 @@ export function connectBackendSocket(onEvent: (e: RealtimeEvent) => void): () =>
   const handler = (e: RealtimeEvent) => onEvent(e);
   socket.on('ORDER_CREATED', handler);
   socket.on('ORDER_STATUS', handler);
+  socket.on('ORDER_DELETED', handler);
   socket.on('RIDER_LOCATION', handler);
   socket.on('RIDER_ASSIGNED', handler);
   socket.on('NOTIFY', handler);
   return () => {
     socket?.off('ORDER_CREATED', handler);
     socket?.off('ORDER_STATUS', handler);
+    socket?.off('ORDER_DELETED', handler);
     socket?.off('RIDER_LOCATION', handler);
     socket?.off('RIDER_ASSIGNED', handler);
     socket?.off('NOTIFY', handler);

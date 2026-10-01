@@ -3,7 +3,7 @@ import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
-import { Copy, Inbox, Minus, Plus, Reply, Trash2 } from 'lucide-react';
+import { Copy, Inbox, Landmark, Minus, Plus, Reply, Trash2 } from 'lucide-react';
 import { useApp } from '../../../shared/store/AppStore';
 import { RESTAURANT } from '../../../shared/data';
 import { FEE_BANDS } from '../../../shared/services/delivery';
@@ -249,6 +249,18 @@ export function FinancePage() {
           <Card key={l} className="border-0"><CardBody className="p-4"><p className="text-[11px] font-bold uppercase tracking-wide text-coal/50">{l}</p><p className="mt-1 font-display text-xl font-extrabold">{v}</p></CardBody></Card>
         ))}
       </div>
+      <Card className="border-0"><CardBody className="flex flex-col gap-3 p-5 text-sm sm:flex-row sm:items-start">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-leaf/10 text-leaf"><Landmark size={18} /></span>
+        <div>
+          <p className="font-display font-extrabold">Where does the money go?</p>
+          <p className="mt-1 leading-relaxed text-coal/65">
+            Card and MoMo payments go to the <b>Paystack balance first</b>, then settle automatically to the
+            restaurant&apos;s bank account (T+1, minus ~1.95% fees) — the app only ever sees references, never
+            account numbers. Cash orders skip providers entirely and land straight in hand. Provider keys live
+            in <b>server/.env</b>; add them to go from MOCK to LIVE collections.
+          </p>
+        </div>
+      </CardBody></Card>
       {rows.length === 0 ? <Empty title="No transactions" body="No paid orders in this period." /> : (
         <>
           <div className="grid gap-3 lg:grid-cols-2">

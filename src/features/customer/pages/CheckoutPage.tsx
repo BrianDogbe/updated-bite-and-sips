@@ -49,6 +49,16 @@ export default function CheckoutPage() {
   const [fCity, setFCity] = useState('Tema');
   const [fLandmark, setFLandmark] = useState('');
 
+  // Real customer details — shown everywhere (kitchen ticket, admin, tracking).
+  // Remembered on this device so repeat orders are one tap.
+  const [custName, setCustName] = useState(() => {
+    try { return localStorage.getItem('bs_cust_name') ?? ''; } catch { return ''; }
+  });
+  const [custPhone, setCustPhone] = useState(() => {
+    try { return localStorage.getItem('bs_cust_phone') ?? ''; } catch { return ''; }
+  });
+  const detailsOk = custName.trim().length >= 2 && custPhone.replace(/\D/g, '').length >= 9;
+
   // Always bring the user back to the process (progress + current step)
   // whenever Continue moves them forward or blocks on an error.
   const processRef = useRef<HTMLDivElement>(null);
@@ -85,7 +95,11 @@ export default function CheckoutPage() {
 
   const canNext = (): boolean => {
     if (step === 0) return cart.length > 0;
-    if (step === 2 && orderType === 'DELIVERY') return !!activeAddress;
+    if (step === 2) {
+      if (!detailsOk) return false;
+      if (orderType === 'DELIVERY') return !!activeAddress;
+      return true;
+    }
     if (step === 3) return timeError === null;
     return true;
   };
@@ -93,7 +107,12 @@ export default function CheckoutPage() {
   const next = () => {
     setError(null);
     if (!canNext()) {
-      setError(step === 0 ? 'Your cart is empty.' : step === 2 ? 'Select or add a delivery address.' : (timeError ?? 'Check your details.'));
+      setError(
+        step === 0 ? 'Your cart is empty.'
+        : step === 2 && !detailsOk ? 'Add your name and phone number so the kitchen knows whose order this is.'
+        : step === 2 ? 'Select or add a delivery address.'
+        : (timeError ?? 'Check your details.'),
+      );
       scrollToProcess();
       return;
     }
@@ -183,10 +202,16 @@ export default function CheckoutPage() {
         return todayAt(schedTime).toISOString();
       })();
       const otp = String(Math.floor(1000 + Math.random() * 9000));
+      try {
+        localStorage.setItem('bs_cust_name', custName.trim());
+        localStorage.setItem('bs_cust_phone', custPhone.trim());
+      } catch {
+        /* ignore */
+      }
       const order = await placeOrder({
         customerId: user?.id ?? 'guest',
-        customerName: user?.name ?? 'Guest',
-        customerPhone: user?.phone ?? '+233 24 000 0000',
+        customerName: custName.trim(),
+        customerPhone: custPhone.trim(),
         items: cart.map((l) => ({
           itemId: l.itemId, name: l.name, qty: l.qty, unitPrice: l.unitPrice,
           modifiers: l.modifiers, instructions: l.instructions,
@@ -214,6 +239,11 @@ export default function CheckoutPage() {
         markOrderPaid(order.id);
       }
       toast({ title: 'Order placed', body: `Order ${order.id} · OTP ${order.deliveryCode ?? otp}`, kind: 'success' });
+      try {
+        localStorage.setItem('bs_last_order', order.id);
+      } catch {
+        /* ignore */
+      }
       navigate(`/track/${order.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not place order.');
@@ -307,7 +337,19 @@ export default function CheckoutPage() {
 
           {step === 2 && (
             <Card><CardBody>
-              <h2 className="font-display text-lg font-extrabold">
+              <h2 className="font-display text-lg font-extrabold">Your details</h2>
+              <p className="mt-1 text-xs text-coal/55">The kitchen ticket, receipt and rider all use this — no accounts needed.</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="cust-name" className="text-xs font-bold uppercase tracking-wide">Full name</label>
+                  <Input id="cust-name" value={custName} onChange={(e) => setCustName(e.target.value)} placeholder="e.g. Ama Serwaa" className="mt-1" autoComplete="name" />
+                </div>
+                <div>
+                  <label htmlFor="cust-phone" className="text-xs font-bold uppercase tracking-wide">Phone</label>
+                  <Input id="cust-phone" value={custPhone} onChange={(e) => setCustPhone(e.target.value)} placeholder="e.g. 024 123 4567" className="mt-1" inputMode="tel" autoComplete="tel" />
+                </div>
+              </div>
+              <h2 className="mt-6 font-display text-lg font-extrabold">
                 {orderType === 'DELIVERY' ? 'Where should we deliver?' : 'Pickup point'}
               </h2>
               {orderType === 'PICKUP' ? (

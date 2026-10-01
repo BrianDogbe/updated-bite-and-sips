@@ -1,17 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Bike } from 'lucide-react';
 import { useApp } from '../../../shared/store/AppStore';
 import { GHS, cn } from '../../../lib/utils';
-import { Button } from '../../../components/ui/button';
 import { Card, CardBody, Badge, Empty, SectionTitle } from '../../../components/ui/primitives';
-import { useToast } from '../../../components/ui/toaster';
 
 const ACTIVE = ['RIDER_ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY'];
 
 export default function DeliveryPage() {
-  const { orders, riders, assignRider } = useApp();
-  const toast = useToast();
-  const [pick, setPick] = useState<Record<string, string>>({});
+  const { orders, riders } = useApp();
 
   const active = useMemo(() => orders.filter((o) => o.orderType === 'DELIVERY' && ACTIVE.includes(o.status)), [orders]);
   const unassigned = useMemo(
@@ -48,7 +44,7 @@ export default function DeliveryPage() {
       </section>
 
       <section>
-        <h3 className="mb-2 font-display text-base font-extrabold">Unassigned orders</h3>
+        <h3 className="mb-2 font-display text-base font-extrabold">Awaiting rider <span className="text-sm font-semibold text-coal/50">(kitchen assigns on handover)</span></h3>
         {unassigned.length === 0 ? (
           <Empty title="All caught up" body="Every delivery order has a rider." />
         ) : (
@@ -61,40 +57,15 @@ export default function DeliveryPage() {
                     <th className="px-4 py-3">Customer</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Rider</th>
-                    <th className="px-4 py-3" />
                   </tr>
                 </thead>
                 <tbody>
                   {unassigned.map((o) => (
                     <tr key={o.id} className="border-b border-coal/5">
                       <td className="px-4 py-3 font-bold">{o.id}</td>
-                      <td className="px-4 py-3">{o.customerName}</td>
+                      <td className="px-4 py-3">{o.customerName} · {o.customerPhone}</td>
                       <td className="px-4 py-3"><Badge className="bg-coal/5 text-coal">{o.status}</Badge></td>
-                      <td className="px-4 py-3">
-                        <select
-                          aria-label={`Assign rider to ${o.id}`}
-                          value={pick[o.id] ?? ''}
-                          onChange={(e) => setPick((p) => ({ ...p, [o.id]: e.target.value }))}
-                          className="h-10 rounded-xl border border-coal/15 bg-white px-2"
-                        >
-                          <option value="">Select rider</option>
-                          {riders.filter((r) => r.online).map((r) => (
-                            <option key={r.id} value={r.id}>{r.name}{r.busy ? ' (busy)' : ''}</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <Button
-                          size="sm"
-                          disabled={!pick[o.id]}
-                          onClick={() => {
-                            assignRider(o.id, pick[o.id]);
-                            toast({ title: 'Rider assigned', body: `${o.id} → ${riderName(pick[o.id])}`, kind: 'success' });
-                          }}
-                        >
-                          Assign
-                        </Button>
-                      </td>
+                      <td className="px-4 py-3 text-coal/55">Awaiting kitchen handover</td>
                     </tr>
                   ))}
                 </tbody>
