@@ -76,13 +76,16 @@ const seedAddresses: Address[] = [
 ];
 
 const seedOrders: Order[] = [
+  // Unassigned READY job: whichever rider signs in sees it under Available jobs,
+  // taps Accept & confirm, and runs the full delivery flow (code 4821).
   {
     id: 'BS1021', customerId: 'c1', customerName: 'Efua A.', customerPhone: '+233 24 000 1111',
     items: [{ itemId: 'm1', name: 'Smash Chicken Burger', qty: 2, unitPrice: 68, modifiers: [] }],
-    orderType: 'DELIVERY', status: 'OUT_FOR_DELIVERY', paymentStatus: 'PAID', paymentMethod: 'MOMO_MTN',
+    orderType: 'DELIVERY', status: 'READY_FOR_PICKUP', paymentStatus: 'PAID', paymentMethod: 'MOMO_MTN',
     subtotal: 136, deliveryFee: 14, serviceFee: 2.72, discount: 0, total: 152.72,
-    deliveryAddress: seedAddresses[0], riderId: 'r2', deliveryCode: '4821',
-    timeline: [{ status: 'PENDING', at: now() }], createdAt: now(), updatedAt: now(),
+    deliveryAddress: seedAddresses[0], riderId: undefined, deliveryCode: '4821',
+    timeline: [{ status: 'PENDING', at: now() }, { status: 'CONFIRMED', at: now() }, { status: 'PREPARING', at: now() }, { status: 'READY_FOR_PICKUP', at: now() }],
+    createdAt: now(), updatedAt: now(),
   },
 ];
 
