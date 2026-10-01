@@ -82,6 +82,10 @@ export function ActiveDelivery() {
     updateOrderStatus(order.id, 'PICKED_UP', by);
     toast({ title: `${order.id} picked up`, body: 'Start the trip when you leave the restaurant.', kind: 'success' });
   };
+  const confirmHandover = () => {
+    updateOrderStatus(order.id, 'RIDER_ASSIGNED', by);
+    toast({ title: `${order.id} confirmed`, body: 'Head to the restaurant for pickup.', kind: 'success' });
+  };
   const startTrip = () => {
     updateOrderStatus(order.id, 'OUT_FOR_DELIVERY', by);
     toast({ title: `${order.id} on the way`, body: 'Customer has been notified.', kind: 'success' });
@@ -208,9 +212,19 @@ export function ActiveDelivery() {
       </Card>
 
       {/* Pickup / trip actions */}
-      {(order.status === 'READY_FOR_PICKUP' || order.status === 'RIDER_ASSIGNED') && (
-        <Button size="lg" onClick={order.status === 'RIDER_ASSIGNED' ? arrived : pickedUp} aria-label={order.status === 'RIDER_ASSIGNED' ? `Confirm arrival at restaurant for order ${order.id}` : `Confirm pickup for order ${order.id}`} className="min-h-[60px] w-full text-lg">
-          <CheckCheck className="h-5 w-5" aria-hidden /> {order.status === 'RIDER_ASSIGNED' ? 'I’ve arrived' : 'I’ve picked up'}
+      {order.status === 'READY_FOR_PICKUP' && order.riderId === me?.id && (
+        <Button size="lg" onClick={confirmHandover} aria-label={`Accept and confirm delivery ${order.id}`} className="min-h-[60px] w-full text-lg">
+          <CheckCheck className="h-5 w-5" aria-hidden /> Accept & confirm
+        </Button>
+      )}
+      {(order.status === 'READY_FOR_PICKUP' && order.riderId !== me?.id) && (
+        <Button size="lg" onClick={pickedUp} aria-label={`Confirm pickup for order ${order.id}`} className="min-h-[60px] w-full text-lg">
+          <CheckCheck className="h-5 w-5" aria-hidden /> I’ve picked up
+        </Button>
+      )}
+      {order.status === 'RIDER_ASSIGNED' && (
+        <Button size="lg" onClick={arrived} aria-label={`Confirm arrival at restaurant for order ${order.id}`} className="min-h-[60px] w-full text-lg">
+          <CheckCheck className="h-5 w-5" aria-hidden /> I’ve arrived
         </Button>
       )}
       {order.status === 'ARRIVED_AT_RESTAURANT' && (

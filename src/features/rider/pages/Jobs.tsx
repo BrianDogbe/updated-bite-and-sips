@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Bike, MapPin, Navigation, Phone, Store } from 'lucide-react';
 import { useApp } from '../../../shared/store/AppStore';
@@ -20,9 +21,15 @@ function mapsLink(lat: number, lng: number): string {
 }
 
 export function Jobs() {
-  const { orders, assignRider, updateOrderStatus, user } = useApp();
+  const { orders, assignRider, updateOrderStatus, refreshOrders, user } = useApp();
   const toast = useToast();
   const me = useMockRider();
+
+  // Always re-pull on open — assignments made in the kitchen land here
+  // even if a realtime event was missed.
+  useEffect(() => {
+    refreshOrders();
+  }, [refreshOrders]);
 
   if (!me) {
     return <Empty title="No riders available" body="Ask dispatch to register a rider account, then try again." />;
@@ -39,6 +46,12 @@ export function Jobs() {
     assignRider(orderId, me.id);
     updateOrderStatus(orderId, 'RIDER_ASSIGNED', user?.name ?? me.name);
     toast({ title: `Delivery ${orderId} accepted`, body: 'Head to the restaurant for pickup.', kind: 'success' });
+  };
+
+  // Confirm an order the kitchen handed to me (READY → RIDER_ASSIGNED).
+  const confirm = (orderId: string) => {
+    updateOrderStatus(orderId, 'RIDER_ASSIGNED', user?.name ?? (me?.name ?? 'rider'));
+    toast({ title: `Delivery ${orderId} confirmed`, body: 'The customer and kitchen have been notified.', kind: 'success' });
   };
 
   return (
@@ -135,13 +148,25 @@ export function Jobs() {
                       <Phone className="h-3.5 w-3.5" aria-hidden /> {o.customerName} · {GHS(o.total)}
                     </p>
                     <div className="mt-3 grid grid-cols-2 gap-2">
-                      <Link
-                        to={`/rider/active/${o.id}`}
-                        aria-label={`Open active delivery ${o.id}`}
-                        className="inline-flex min-h-[52px] items-center justify-center rounded-xl bg-coal text-sm font-bold text-white"
-                      >
-                        Open delivery
-                      </Link>
+                      {o.status === 'READY_FOR_PICKUP' ? (
+                        <Button
+                          size="lg"
+                          onClick={() => confirm(o.id)}
+                          disabled={!me.online}
+                          aria-label={`Accept and confirm delivery ${o.id}`}
+                          className="col-span-2 min-h-[56px] w-full text-base"
+                        >
+                          <Bike className="h-5 w-5" aria-hidden /> Accept & confirm
+                        </Button>
+                      ) : (
+                        <Link
+                          to={`/rider/active/${o.id}`}
+                          aria-label={`Open active delivery ${o.id}`}
+                          className="inline-flex min-h-[52px] items-center justify-center rounded-xl bg-coal text-sm font-bold text-white"
+                        >
+                          Open delivery
+                        </Link>
+                      )}
                       <a
                         href={mapsLink(
                           o.deliveryAddress?.lat ?? RESTAURANT.lat,

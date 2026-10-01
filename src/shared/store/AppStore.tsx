@@ -33,6 +33,7 @@ interface AppState {
   addAddress: (a: Address) => void;
   orders: Order[];
   placeOrder: (o: Omit<Order, 'id' | 'createdAt' | 'updatedAt' | 'timeline'>) => Promise<Order>;
+  refreshOrders: () => void;
   updateOrderStatus: (id: string, status: OrderStatus, by?: string) => void;
   markOrderPaid: (id: string) => void;
   assignRider: (orderId: string, riderId: string) => void;
@@ -178,15 +179,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
   useEffect(() => {
     if (!backendEnabled() || !user || user.role === 'CUSTOMER') return;
-    // Staff list sync. Any list that fails to load falls back to mock seeds
-    // when empty — boards must never go blank (offline server, expired token…).
+    // Without a token we can never load live lists — always use working seeds.
     if (!getToken()) {
-      if (!isBackendReachable()) {
-        setOrders(seedOrders);
-        setRiders(INITIAL_RIDERS);
-        setMessages(seedMockMessages());
-        setInventory(INVENTORY_SEED);
-      }
+      setOrders(seedOrders);
+      setRiders(INITIAL_RIDERS);
+      setMessages(seedMockMessages());
+      setInventory(INVENTORY_SEED);
       return;
     }
     api<Order[]>('/api/orders', { auth: true }).then(setOrders).catch(() =>
@@ -202,6 +200,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setInventory((prev) => (prev.length > 0 ? prev : INVENTORY_SEED)),
     );
   }, [user]);
+
+  // Re-pull the order book (used when (re)opening boards, so assignments
+  // made elsewhere appear even if a socket event was missed).
+  const refreshOrders = useCallback(() => {
+    if (!backendEnabled()) return;
+    if (!getToken()) {
+      setOrders((prev) => (prev.length > 0 ? prev : seedOrders));
+      setRiders((prev) => (prev.length > 0 ? prev : INITIAL_RIDERS));
+      return;
+    }
+    api<Order[]>('/api/orders', { auth: true }).then(setOrders).catch(() =>
+      setOrders((prev) => (prev.length > 0 ? prev : seedOrders)),
+    );
+    api<Rider[]>('/api/riders', { auth: true }).then(setRiders).catch(() =>
+      setRiders((prev) => (prev.length > 0 ? prev : INITIAL_RIDERS)),
+    );
+  }, []);
 
   // Demo credentials for the portal auto-logins (real users sign in via loginWithPassword)
   const DEMO_CREDS: Record<string, { email: string; password: string }> = useMemo(() => ({
@@ -456,7 +471,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value: AppState = {
     user, login, loginWithPassword, logout, menu, setAvailability, upsertMenuItem, cart, addToCart, updateQty,
     removeLine, clearCart, cartCount, favorites, toggleFav, addresses, activeAddress,
-    setActiveAddress, addAddress, orders, placeOrder, updateOrderStatus, markOrderPaid, assignRider, deleteOrder,
+    setActiveAddress, addAddress, orders, placeOrder, refreshOrders, updateOrderStatus, markOrderPaid, assignRider, deleteOrder,
     riders, setRiderOnline, promos, applyPromo, calcTotals, notifications, pushNotification,
     markAllRead, messages, addMessage, markMessageRead, deleteMessage, audit, logAudit, inventory, adjustStock, riderLocations,
   };
